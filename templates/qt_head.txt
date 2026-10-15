@@ -1,0 +1,40 @@
+# -*- coding: utf-8 -*-
+# AUTOMATISCH ERZEUGT von Pyphi7 (Qt / PySide6) - nicht von Hand aendern!
+# Diese Datei wird bei jedem "Code erzeugen" neu geschrieben.
+# Deine eigenen Funktionen gehoeren nach @@STEM@@_logic.py
+import os
+import sys
+
+from PySide6.QtCore import Qt, QTimer, QEvent
+from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QLineEdit,
+                               QCheckBox, QRadioButton, QButtonGroup, QGroupBox, QFrame,
+                               QProgressBar, QSlider, QSpinBox, QListWidget,
+                               QPlainTextEdit, QComboBox, QMessageBox)
+
+import @@STEM@@_logic as logic
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_K = Qt.Key
+_KEYNAMES = {_K.Key_Return: "Enter", _K.Key_Enter: "Enter", _K.Key_Escape: "Escape",
+             _K.Key_Backspace: "Backspace", _K.Key_Tab: "Tab", _K.Key_Delete: "Delete",
+             _K.Key_Up: "Up", _K.Key_Down: "Down", _K.Key_Left: "Left", _K.Key_Right: "Right",
+             _K.Key_Home: "Home", _K.Key_End: "End", _K.Key_PageUp: "PageUp",
+             _K.Key_PageDown: "PageDown", _K.Key_Insert: "Insert"}
+
+
+class Window(QWidget):
+    """Das Fenster. Deine Funktionen bekommen es als 'ui' uebergeben."""
+
+    def __init__(self):
+        self._app = QApplication.instance() or QApplication(sys.argv)
+        super().__init__()
+        self.setWindowTitle(@@TITLE@@)
+        self.setFixedSize(@@W@@, @@H@@)
+        self.w = {}        # Name -> Qt-Widget
+        self.kinds = {}    # Name -> Typ
+        self._ev = {}      # Widget -> Ereignisse (Fokus, Tasten)
+        self._groups = {}  # RadioButton-Gruppen
+        self._on_close_fn = ""
+        self._in_close = False
+        self.key = ""      # zuletzt gedrueckte Taste (fuer OnKeyPress)

@@ -1,0 +1,4 @@
+
+
+def {name}(ui):
+    ui.message("{name} wurde aufgerufen - hier deinen Code einfuegen")

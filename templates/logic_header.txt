@@ -1,0 +1,32 @@
+# -*- coding: utf-8 -*-
+"""Deine Logik fuer @@STEM@@.
+
+Diese Datei gehoert dir: Pyphi7 ueberschreibt sie NIE. Doppelklick auf eine
+Komponente im Designer haengt hier nur eine leere Funktion an (wie in Delphi).
+Die gleiche Logik laeuft mit Tkinter UND mit Qt.
+
+Jede Funktion bekommt das Fenster als 'ui'. Das kannst du damit tun:
+
+    ui.get_text("Edit1")              Text lesen (Edit, Memo, Label, Button, ...)
+    ui.set_text("Label1", "Hallo")    Text setzen
+    ui.get_value("TrackBar1")         Zahl lesen (ProgressBar, TrackBar, SpinEdit)
+    ui.set_value("ProgressBar1", 50)  Zahl setzen
+    ui.is_checked("CheckBox1")        Haken lesen (auch RadioButton)
+    ui.set_checked("CheckBox1", True) Haken setzen
+    ui.set_items("ListBox1", ["a", "b"])  Eintraege der Liste/Auswahl ersetzen
+    ui.add_item("ListBox1", "c")      Eintrag anhaengen
+    ui.get_items("ListBox1")          Eintraege lesen
+    ui.selected_index("ListBox1")     gewaehlter Eintrag (-1 = keiner)
+    ui.set_selected_index("ListBox1", 0)  Eintrag waehlen
+    ui.set_enabled("Button1", False)  Komponente sperren / freigeben (Timer: stoppen / starten)
+    ui.set_visible("Button1", False)  Komponente verstecken / zeigen
+    ui.set_interval("Timer1", 500)    Takt eines Timers in Millisekunden
+    ui.set_image("Image1", "bild.png")    Bild laden (Pfad relativ zum Programm)
+    ui.key                            letzte Taste (in OnKeyPress): "a", "Enter", "Escape", ...
+    ui.message("Text")                Meldungsfenster
+    ui.ask_yes_no("Frage?")           Ja/Nein-Frage (True/False)
+    ui.close()                        Fenster schliessen
+    ui.widget("Button1")              das echte Tk-/Qt-Widget (Spezialfaelle)
+
+FormClose darf False zurueckgeben - dann bleibt das Fenster offen.
+"""

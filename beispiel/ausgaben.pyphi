@@ -1,0 +1,143 @@
+{
+  "version": 2,
+  "title": "Ausgaben",
+  "width": 480,
+  "height": 300,
+  "on_create": "FormCreate",
+  "on_close": "",
+  "color": "",
+  "center": true,
+  "widgets": [
+    {
+      "type": "Label",
+      "name": "Label1",
+      "text": "Kategorie:",
+      "x": 16,
+      "y": 16,
+      "w": 120,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Listbox",
+      "name": "ListBox1",
+      "text": "Miete|Essen|Auto|Freizeit",
+      "x": 16,
+      "y": 36,
+      "w": 144,
+      "h": 96,
+      "enabled": true,
+      "visible": true,
+      "handler": "ListBox1Click",
+      "props": {
+        "index": "0"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "Label2",
+      "text": "Betrag in Euro:",
+      "x": 16,
+      "y": 148,
+      "w": 120,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Entry",
+      "name": "Edit1",
+      "text": "",
+      "x": 16,
+      "y": 168,
+      "w": 96,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "events": {
+        "OnKeyPress": "Edit1KeyPress"
+      },
+      "props": {
+        "hint": "z. B. 12,50  (Enter = hinzufuegen)"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "Button1",
+      "text": "+",
+      "x": 120,
+      "y": 166,
+      "w": 40,
+      "h": 25,
+      "enabled": true,
+      "visible": true,
+      "handler": "Button1Click",
+      "props": {
+        "font_size": "12",
+        "font_bold": "True",
+        "hint": "Ausgabe hinzufuegen"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "Button2",
+      "text": "Alles leeren",
+      "x": 16,
+      "y": 252,
+      "w": 144,
+      "h": 25,
+      "enabled": true,
+      "visible": true,
+      "handler": "Button2Click"
+    },
+    {
+      "type": "Label",
+      "name": "Label3",
+      "text": "Ausgaben:",
+      "x": 176,
+      "y": 16,
+      "w": 120,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Text",
+      "name": "Memo1",
+      "text": "",
+      "x": 176,
+      "y": 36,
+      "w": 288,
+      "h": 196,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "readonly": "True",
+        "wrap": "False"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "Label4",
+      "text": "Summe: 0,00 €",
+      "x": 176,
+      "y": 244,
+      "w": 288,
+      "h": 22,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "font_size": "12",
+        "font_bold": "True",
+        "alignment": "taRightJustify"
+      }
+    }
+  ]
+}

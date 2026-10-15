@@ -1,0 +1,112 @@
+# -*- coding: utf-8 -*-
+# AUTOMATISCH ERZEUGT von Pyphi7 (Tkinter) - nicht von Hand aendern!
+# Diese Datei wird bei jedem "Code erzeugen" neu geschrieben.
+# Deine eigenen Funktionen gehoeren nach @@STEM@@_logic.py
+import os
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+import @@STEM@@_logic as logic
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_KEYNAMES = {"Return": "Enter", "KP_Enter": "Enter", "BackSpace": "Backspace",
+             "Prior": "PageUp", "Next": "PageDown"}
+_MODKEYS = ("Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R",
+            "Caps_Lock", "Meta_L", "Meta_R", "Super_L", "Super_R", "ISO_Level3_Shift")
+
+
+class _Tip:
+    """Kleiner Tooltip (Eigenschaft Hint)."""
+
+    def __init__(self, widget, text):
+        self.widget, self.text, self.tw, self.job = widget, text, None, None
+        widget.bind("<Enter>", self._enter, add="+")
+        widget.bind("<Leave>", self._leave, add="+")
+        widget.bind("<ButtonPress>", self._leave, add="+")
+
+    def _enter(self, _e):
+        self._leave()
+        self.job = self.widget.after(500, self._show)
+
+    def _show(self):
+        self.job = None
+        x = self.widget.winfo_rootx() + 12
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self.tw = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry("+%d+%d" % (x, y))
+        tk.Label(tw, text=self.text, background="#ffffe1", foreground="black",
+                 relief="solid", borderwidth=1, padx=3).pack()
+
+    def _leave(self, _e=None):
+        if self.job:
+            self.widget.after_cancel(self.job)
+            self.job = None
+        if self.tw:
+            self.tw.destroy()
+            self.tw = None
+
+
+class _Timer:
+    """Timer-Komponente: ruft alle 'ms' Millisekunden deine Funktion auf."""
+
+    def __init__(self, win, ms, enabled, fname):
+        self.win, self.ms, self.fname = win, ms, fname
+        self.on, self.job = False, None
+        if enabled:
+            self.start()
+
+    def start(self):
+        self.on = True
+        if self.job is None:
+            self.job = self.win.root.after(self.ms, self._tick)
+
+    def stop(self):
+        self.on = False
+        if self.job is not None:
+            self.win.root.after_cancel(self.job)
+            self.job = None
+
+    def _tick(self):
+        self.job = None
+        if not self.on:
+            return
+        self.job = self.win.root.after(self.ms, self._tick)
+        if self.fname:
+            self.win._call(self.fname)
+
+
+def _fit(img, w, h):
+    """Bild ohne Pillow grob auf die Komponente skalieren (ganzzahlig)."""
+    iw, ih = img.width(), img.height()
+    if iw <= 0 or ih <= 0:
+        return img
+    if iw > w or ih > h:
+        f = max(-(-iw // max(w, 1)), -(-ih // max(h, 1)))
+        return img.subsample(f, f)
+    f = min(w // iw, h // ih)
+    return img.zoom(f, f) if f > 1 else img
+
+
+class Window:
+    """Das Fenster. Deine Funktionen bekommen es als 'ui' uebergeben."""
+
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title(@@TITLE@@)
+        self.root.geometry("@@W@@x@@H@@")
+        self.root.resizable(False, False)
+        self.w = {}        # Name -> Tk-Widget
+        self.kinds = {}    # Name -> Typ
+        self._geo = {}     # Name -> Position/Groesse
+        self._vars = {}    # Variablen (Checkbox, Radiobutton, Edit, SpinEdit)
+        self._groups = {}  # RadioButton-Gruppen
+        self._min = {}     # Untergrenze der ProgressBar
+        self._ro = set()   # schreibgeschuetzte Memos
+        self._images = {}  # Bild-Referenzen (sonst verschwinden sie)
+        self._stretch = {}
+        self._fonts = []   # Font-Objekte am Leben halten
+        self._on_close_fn = ""
+        self._in_close = False
+        self.key = ""      # zuletzt gedrueckte Taste (fuer OnKeyPress)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)

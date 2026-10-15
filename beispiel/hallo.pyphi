@@ -1,0 +1,93 @@
+{
+  "version": 2,
+  "title": "Hallo Welt",
+  "width": 360,
+  "height": 250,
+  "on_create": "FormCreate",
+  "widgets": [
+    {
+      "type": "Label",
+      "name": "Label1",
+      "text": "Dein Name:",
+      "x": 16,
+      "y": 16,
+      "w": 150,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Entry",
+      "name": "Edit1",
+      "text": "",
+      "x": 16,
+      "y": 40,
+      "w": 200,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Button",
+      "name": "Button1",
+      "text": "Begrüßen",
+      "x": 232,
+      "y": 38,
+      "w": 104,
+      "h": 25,
+      "enabled": true,
+      "visible": true,
+      "handler": "Button1Click"
+    },
+    {
+      "type": "Checkbox",
+      "name": "CheckBox1",
+      "text": "GROSSBUCHSTABEN",
+      "x": 16,
+      "y": 72,
+      "w": 200,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Label",
+      "name": "Label2",
+      "text": "",
+      "x": 16,
+      "y": 100,
+      "w": 320,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Listbox",
+      "name": "ListBox1",
+      "text": "Moin|Servus|Hallo|Guten Tag",
+      "x": 16,
+      "y": 128,
+      "w": 200,
+      "h": 90,
+      "enabled": true,
+      "visible": true,
+      "handler": "ListBox1Click"
+    },
+    {
+      "type": "Button",
+      "name": "Button2",
+      "text": "Schließen",
+      "x": 232,
+      "y": 193,
+      "w": 104,
+      "h": 25,
+      "enabled": true,
+      "visible": true,
+      "handler": "Button2Click"
+    }
+  ]
+}

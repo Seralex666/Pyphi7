@@ -1,0 +1,189 @@
+
+    # ---- Hilfsfunktionen fuer deine Logik ------------------------------
+    def _add(self, name, kind, widget, x, y, width, height):
+        self.w[name] = widget
+        self.kinds[name] = kind
+        widget.setGeometry(x, y, width, height)
+
+    def _timer(self, name, ms, enabled, fname):
+        t = QTimer(self)
+        t.setInterval(ms)
+        if fname:
+            t.timeout.connect(lambda: self._call(fname))
+        self.w[name] = t
+        self.kinds[name] = "Timer"
+        if enabled:
+            t.start()
+
+    def _group(self, index):
+        if index not in self._groups:
+            self._groups[index] = QButtonGroup(self)
+        return self._groups[index]
+
+    def _watch(self, widget, **spec):
+        """Fokus-/Tastenereignisse eines Widgets beobachten."""
+        self._ev.setdefault(widget, {}).update(spec)
+        widget.installEventFilter(self)
+
+    def eventFilter(self, obj, ev):
+        spec = self._ev.get(obj)
+        if spec:
+            t = ev.type()
+            if t == QEvent.Type.FocusIn and "enter" in spec:
+                self._call(spec["enter"])
+            elif t == QEvent.Type.FocusOut and "exit" in spec:
+                self._call(spec["exit"])
+            elif t == QEvent.Type.KeyPress and "key" in spec:
+                self.key = _KEYNAMES.get(ev.key()) or ev.text()
+                self._call(spec["key"])
+        return False
+
+    def _call(self, fname):
+        fn = getattr(logic, fname, None)
+        if fn is None:
+            QMessageBox.critical(self, "Funktion fehlt",
+                                 "In @@STEM@@_logic.py fehlt: def %s(ui)" % fname)
+            return None
+        return fn(self)
+
+    def closeEvent(self, ev):
+        if self._on_close_fn and not self._in_close:
+            self._in_close = True
+            try:
+                res = self._call(self._on_close_fn)
+            finally:
+                self._in_close = False
+            if res is False:
+                ev.ignore()
+                return
+        ev.accept()
+
+    def widget(self, name):
+        """Das echte Qt-Widget (fuer Spezialfaelle)."""
+        return self.w[name]
+
+    def get_text(self, name):
+        wd, kind = self.w[name], self.kinds[name]
+        if kind == "Text":
+            return wd.toPlainText()
+        if kind == "Combobox":
+            return wd.currentText()
+        if kind == "Listbox":
+            item = wd.currentItem()
+            return item.text() if item else ""
+        if kind == "Spinedit":
+            return str(wd.value())
+        if kind in ("Progressbar", "Trackbar", "Image", "Timer"):
+            return ""
+        return wd.text()
+
+    def set_text(self, name, text):
+        wd, kind = self.w[name], self.kinds[name]
+        text = str(text)
+        if kind == "Text":
+            wd.setPlainText(text)
+        elif kind == "Combobox":
+            if wd.isEditable():
+                wd.setCurrentText(text)
+            else:
+                wd.setCurrentIndex(wd.findText(text))
+        elif kind == "Spinedit":
+            wd.setValue(int(float(text)))
+        elif kind in ("Progressbar", "Trackbar", "Image", "Timer"):
+            pass
+        elif kind == "Groupbox":
+            wd.setTitle(text)
+        else:
+            wd.setText(text)
+
+    def get_value(self, name):
+        """Zahlenwert von ProgressBar, TrackBar oder SpinEdit."""
+        if self.kinds[name] not in ("Progressbar", "Trackbar", "Spinedit"):
+            raise ValueError("%s hat keinen Zahlenwert" % name)
+        return self.w[name].value()
+
+    def set_value(self, name, value):
+        if self.kinds[name] not in ("Progressbar", "Trackbar", "Spinedit"):
+            raise ValueError("%s hat keinen Zahlenwert" % name)
+        self.w[name].setValue(int(value))
+
+    def is_checked(self, name):
+        return self.w[name].isChecked()
+
+    def set_checked(self, name, value=True):
+        wd = self.w[name]
+        grp = wd.group() if self.kinds[name] == "Radiobutton" else None
+        if grp is not None and not value:
+            grp.setExclusive(False)        # sonst kann man einen Radio nicht abwaehlen
+            wd.setChecked(False)
+            grp.setExclusive(True)
+        else:
+            wd.setChecked(bool(value))
+
+    def set_items(self, name, items):
+        wd = self.w[name]
+        wd.clear()
+        wd.addItems([str(i) for i in items])
+        if self.kinds[name] == "Combobox":
+            wd.setCurrentIndex(-1)
+
+    def add_item(self, name, text):
+        """Einen Eintrag ans Ende von Liste/Auswahlfeld haengen."""
+        self.w[name].addItem(str(text))
+
+    def get_items(self, name):
+        wd = self.w[name]
+        if self.kinds[name] == "Listbox":
+            return [wd.item(i).text() for i in range(wd.count())]
+        return [wd.itemText(i) for i in range(wd.count())]
+
+    def selected_index(self, name):
+        """Index des gewaehlten Eintrags (Liste/Auswahlfeld) oder -1."""
+        wd = self.w[name]
+        if self.kinds[name] == "Listbox":
+            return wd.currentRow()
+        return wd.currentIndex()
+
+    def set_selected_index(self, name, index):
+        wd = self.w[name]
+        if self.kinds[name] == "Listbox":
+            wd.setCurrentRow(index)
+        else:
+            wd.setCurrentIndex(index)
+
+    def set_enabled(self, name, flag=True):
+        wd = self.w[name]
+        if self.kinds[name] == "Timer":
+            wd.start() if flag else wd.stop()
+        else:
+            wd.setEnabled(bool(flag))
+
+    def set_visible(self, name, flag=True):
+        if self.kinds[name] != "Timer":
+            self.w[name].setVisible(bool(flag))
+
+    def set_interval(self, name, ms):
+        """Takt eines Timers in Millisekunden aendern."""
+        self.w[name].setInterval(int(ms))
+
+    def set_image(self, name, path):
+        """Bild laden (relativ zum Programmordner)."""
+        full = path if os.path.isabs(path) else os.path.join(_HERE, path)
+        pix = QPixmap(full) if path else QPixmap()
+        self.w[name].setPixmap(pix)
+
+    def message(self, text, title="Hinweis"):
+        QMessageBox.information(self, title, str(text))
+
+    def ask_yes_no(self, text, title="Frage"):
+        return QMessageBox.question(self, title, str(text)) == QMessageBox.StandardButton.Yes
+
+    # close() kommt von Qt selbst: ui.close() schliesst das Fenster (ruft vorher FormClose).
+
+    def run(self):
+        self.show()
+        return self._app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(Window().run())

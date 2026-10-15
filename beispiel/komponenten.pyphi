@@ -1,0 +1,300 @@
+{
+  "version": 2,
+  "title": "Alles",
+  "width": 520,
+  "height": 420,
+  "on_create": "FormCreate",
+  "on_close": "FormClose",
+  "color": "#e8e4d8",
+  "center": true,
+  "widgets": [
+    {
+      "type": "Groupbox",
+      "name": "GroupBox1",
+      "text": "Gruppe",
+      "x": 8,
+      "y": 8,
+      "w": 250,
+      "h": 150,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "font_bold": "True"
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "Panel1",
+      "text": "Ein Panel",
+      "x": 270,
+      "y": 8,
+      "w": 240,
+      "h": 40,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "color": "#c0d0ff",
+        "bevel": "bvLowered",
+        "font_size": "12",
+        "font_color": "#aa0000"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "Label1",
+      "text": "Name:",
+      "x": 20,
+      "y": 32,
+      "w": 100,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "alignment": "taRightJustify",
+        "font_color": "#0000aa"
+      }
+    },
+    {
+      "type": "Entry",
+      "name": "Edit1",
+      "text": "hallo",
+      "x": 130,
+      "y": 28,
+      "w": 120,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": "Edit1Change",
+      "props": {
+        "password": "*",
+        "hint": "Ein Hinweis"
+      },
+      "events": {
+        "OnEnter": "Edit1Enter",
+        "OnExit": "Edit1Exit",
+        "OnKeyPress": "Edit1KeyPress"
+      }
+    },
+    {
+      "type": "Checkbox",
+      "name": "CheckBox1",
+      "text": "Haken",
+      "x": 20,
+      "y": 60,
+      "w": 97,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": "CheckBox1Click",
+      "props": {
+        "checked": "True"
+      }
+    },
+    {
+      "type": "Radiobutton",
+      "name": "RadioButton1",
+      "text": "Eins",
+      "x": 20,
+      "y": 84,
+      "w": 100,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": "RadioButton1Click",
+      "props": {
+        "checked": "True"
+      }
+    },
+    {
+      "type": "Radiobutton",
+      "name": "RadioButton2",
+      "text": "Zwei",
+      "x": 20,
+      "y": 104,
+      "w": 100,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": "RadioButton2Click"
+    },
+    {
+      "type": "Radiobutton",
+      "name": "RadioButton3",
+      "text": "Andere Gruppe",
+      "x": 130,
+      "y": 84,
+      "w": 100,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "group": "1"
+      }
+    },
+    {
+      "type": "Listbox",
+      "name": "ListBox1",
+      "text": "Eins|Zwei|Drei",
+      "x": 270,
+      "y": 60,
+      "w": 120,
+      "h": 80,
+      "enabled": true,
+      "visible": true,
+      "handler": "ListBox1Click",
+      "props": {
+        "index": "1"
+      },
+      "events": {
+        "OnDblClick": "ListBox1DblClick"
+      }
+    },
+    {
+      "type": "Combobox",
+      "name": "ComboBox1",
+      "text": "A|B|C",
+      "x": 400,
+      "y": 60,
+      "w": 100,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": "ComboBox1Change",
+      "props": {
+        "index": "2"
+      }
+    },
+    {
+      "type": "Combobox",
+      "name": "ComboBox2",
+      "text": "X|Y",
+      "x": 400,
+      "y": 90,
+      "w": 100,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": "ComboBox2Change",
+      "props": {
+        "style": "csDropDown"
+      }
+    },
+    {
+      "type": "Text",
+      "name": "Memo1",
+      "text": "Zeile 1\nZeile 2",
+      "x": 8,
+      "y": 170,
+      "w": 250,
+      "h": 80,
+      "enabled": true,
+      "visible": true,
+      "handler": "Memo1Change",
+      "props": {
+        "readonly": "True",
+        "wrap": "False"
+      }
+    },
+    {
+      "type": "Progressbar",
+      "name": "ProgressBar1",
+      "text": "",
+      "x": 270,
+      "y": 170,
+      "w": 200,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "min": "10",
+        "max": "110",
+        "pos": "60"
+      }
+    },
+    {
+      "type": "Trackbar",
+      "name": "TrackBar1",
+      "text": "",
+      "x": 270,
+      "y": 195,
+      "w": 200,
+      "h": 45,
+      "enabled": true,
+      "visible": true,
+      "handler": "TrackBar1Change",
+      "props": {
+        "max": "20",
+        "pos": "5"
+      }
+    },
+    {
+      "type": "Spinedit",
+      "name": "SpinEdit1",
+      "text": "",
+      "x": 8,
+      "y": 262,
+      "w": 100,
+      "h": 22,
+      "enabled": true,
+      "visible": true,
+      "handler": "SpinEdit1Change",
+      "props": {
+        "min": "-5",
+        "max": "50",
+        "pos": "7"
+      }
+    },
+    {
+      "type": "Image",
+      "name": "Image1",
+      "text": "",
+      "x": 130,
+      "y": 262,
+      "w": 80,
+      "h": 60,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "picture": "bild.png"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "Button1",
+      "text": "Test",
+      "x": 8,
+      "y": 340,
+      "w": 100,
+      "h": 25,
+      "enabled": true,
+      "visible": true,
+      "handler": "Button1Click",
+      "props": {
+        "font_size": "11",
+        "font_bold": "True",
+        "font_color": "#006600"
+      }
+    },
+    {
+      "type": "Timer",
+      "name": "Timer1",
+      "text": "",
+      "x": 230,
+      "y": 340,
+      "w": 24,
+      "h": 24,
+      "enabled": true,
+      "visible": true,
+      "handler": "Timer1Timer",
+      "props": {
+        "interval": "50"
+      }
+    }
+  ]
+}

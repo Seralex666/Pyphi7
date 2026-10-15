@@ -1,0 +1,256 @@
+
+    # ---- Hilfsfunktionen fuer deine Logik ------------------------------
+    def _add(self, name, kind, widget, x, y, width, height):
+        self.w[name] = widget
+        self.kinds[name] = kind
+        self._geo[name] = dict(x=x, y=y, width=width, height=height)
+        widget.place(**self._geo[name])
+
+    def _timer(self, name, ms, enabled, fname):
+        self.w[name] = _Timer(self, ms, enabled, fname)
+        self.kinds[name] = "Timer"
+
+    def _group(self, index):
+        return self._groups.setdefault(index, tk.StringVar(value=""))
+
+    def _font(self, size=0, bold=False):
+        """Schrift passend zum Standardfont (size in Punkten, 0 = Standard)."""
+        import tkinter.font as tkfont
+        f = tkfont.nametofont("TkDefaultFont").copy()
+        if size:
+            f.configure(size=size)
+        if bold:
+            f.configure(weight="bold")
+        self._fonts.append(f)
+        return f
+
+    def _style(self, name, base, font=None, fg=None):
+        """Eigener ttk-Stil fuer Schrift und Farbe einer einzelnen Komponente."""
+        sname = "%s.%s" % (name, base)
+        opts = {}
+        if font:
+            opts["font"] = font
+        if fg:
+            opts["foreground"] = fg
+        ttk.Style(self.root).configure(sname, **opts)
+        return sname
+
+    def _call(self, fname):
+        fn = getattr(logic, fname, None)
+        if fn is None:
+            messagebox.showerror("Funktion fehlt",
+                                 "In @@STEM@@_logic.py fehlt: def %s(ui)" % fname)
+            return None
+        return fn(self)
+
+    def _key(self, e, fname):
+        if e.keysym in _MODKEYS:
+            return
+        ch = e.char
+        self.key = ch if ch and ch.isprintable() else _KEYNAMES.get(e.keysym, e.keysym)
+        self._call(fname)
+
+    def _modified(self, wd, fname):
+        if wd.edit_modified():
+            wd.edit_modified(False)
+            self._call(fname)
+
+    def widget(self, name):
+        """Das echte Tk-Widget (fuer Spezialfaelle)."""
+        return self.w[name]
+
+    def get_text(self, name):
+        wd, kind = self.w[name], self.kinds[name]
+        if kind == "Text":
+            return wd.get("1.0", "end-1c")
+        if kind in ("Entry", "Combobox"):
+            return wd.get()
+        if kind == "Spinedit":
+            return str(self.get_value(name))
+        if kind == "Listbox":
+            sel = wd.curselection()
+            return wd.get(sel[0]) if sel else ""
+        if kind in ("Progressbar", "Trackbar", "Image", "Timer"):
+            return ""
+        return wd.cget("text")
+
+    def set_text(self, name, text):
+        wd, kind = self.w[name], self.kinds[name]
+        text = str(text)
+        if kind == "Text":
+            state = str(wd.cget("state"))
+            wd.configure(state="normal")
+            wd.delete("1.0", "end")
+            wd.insert("1.0", text)
+            wd.configure(state=state)
+        elif kind == "Entry":
+            self._vars[name].set(text)     # ein einziges OnChange
+        elif kind == "Combobox":
+            wd.set(text)
+        elif kind == "Spinedit":
+            self.set_value(name, int(float(text)))
+        elif kind in ("Progressbar", "Trackbar", "Image", "Timer"):
+            pass
+        else:
+            wd.configure(text=text)
+
+    def get_value(self, name):
+        """Zahlenwert von ProgressBar, TrackBar oder SpinEdit."""
+        wd, kind = self.w[name], self.kinds[name]
+        if kind == "Trackbar":
+            return int(wd.get())
+        if kind == "Progressbar":
+            return int(float(wd.cget("value"))) + self._min[name]
+        if kind == "Spinedit":
+            try:
+                return int(float(self._vars[name].get()))
+            except ValueError:
+                return 0
+        raise ValueError("%s hat keinen Zahlenwert" % name)
+
+    def set_value(self, name, value):
+        wd, kind = self.w[name], self.kinds[name]
+        value = int(value)
+        if kind == "Trackbar":
+            wd.set(value)
+        elif kind == "Progressbar":
+            wd.configure(value=value - self._min[name])
+        elif kind == "Spinedit":
+            lo, hi = int(float(wd.cget("from"))), int(float(wd.cget("to")))
+            self._vars[name].set(str(max(lo, min(hi, value))))
+        else:
+            raise ValueError("%s hat keinen Zahlenwert" % name)
+
+    def is_checked(self, name):
+        if self.kinds[name] == "Radiobutton":
+            return self._vars[name].get() == name
+        return bool(self._vars[name].get())
+
+    def set_checked(self, name, value=True):
+        if self.kinds[name] == "Radiobutton":
+            var = self._vars[name]
+            if value:
+                var.set(name)
+            elif var.get() == name:
+                var.set("")
+        else:
+            self._vars[name].set(bool(value))
+
+    def set_items(self, name, items):
+        wd, kind = self.w[name], self.kinds[name]
+        items = [str(i) for i in items]
+        if kind == "Listbox":
+            state = str(wd.cget("state"))
+            wd.configure(state="normal")
+            wd.delete(0, "end")
+            for i in items:
+                wd.insert("end", i)
+            wd.configure(state=state)
+        elif kind == "Combobox":
+            wd.configure(values=items)
+
+    def add_item(self, name, text):
+        """Einen Eintrag ans Ende von Liste/Auswahlfeld haengen."""
+        wd, kind = self.w[name], self.kinds[name]
+        if kind == "Listbox":
+            wd.insert("end", str(text))
+        elif kind == "Combobox":
+            wd.configure(values=list(wd.cget("values")) + [str(text)])
+
+    def get_items(self, name):
+        wd, kind = self.w[name], self.kinds[name]
+        if kind == "Listbox":
+            return list(wd.get(0, "end"))
+        return list(wd.cget("values"))
+
+    def selected_index(self, name):
+        """Index des gewaehlten Eintrags (Liste/Auswahlfeld) oder -1."""
+        wd, kind = self.w[name], self.kinds[name]
+        if kind == "Listbox":
+            sel = wd.curselection()
+            return sel[0] if sel else -1
+        return wd.current()
+
+    def set_selected_index(self, name, index):
+        wd, kind = self.w[name], self.kinds[name]
+        if kind == "Listbox":
+            wd.selection_clear(0, "end")
+            if index >= 0:
+                wd.selection_set(index)
+                wd.see(index)
+        elif kind == "Combobox":
+            if index < 0:
+                wd.set("")
+            else:
+                wd.current(index)
+
+    def set_enabled(self, name, flag=True):
+        wd, kind = self.w[name], self.kinds[name]
+        if kind == "Timer":
+            wd.start() if flag else wd.stop()
+        elif kind == "Text":
+            wd.configure(state="normal" if flag and name not in self._ro else "disabled")
+        elif kind in ("Listbox", "Trackbar", "Panel", "Image"):
+            wd.configure(state="normal" if flag else "disabled")
+        else:
+            wd.state(["!disabled" if flag else "disabled"])
+
+    def set_visible(self, name, flag=True):
+        if self.kinds[name] == "Timer":
+            return
+        if flag:
+            self.w[name].place(**self._geo[name])
+        else:
+            self.w[name].place_forget()
+
+    def set_interval(self, name, ms):
+        """Takt eines Timers in Millisekunden aendern."""
+        self.w[name].ms = int(ms)
+
+    def set_image(self, name, path):
+        """Bild laden (relativ zum Programmordner). PNG/GIF; mit Pillow auch JPG u.a."""
+        wd = self.w[name]
+        full = path if os.path.isabs(path) else os.path.join(_HERE, path)
+        w, h = self._geo[name]["width"], self._geo[name]["height"]
+        img = None
+        if path and os.path.exists(full):
+            try:
+                from PIL import Image as _PI, ImageTk as _PT
+                im = _PI.open(full)
+                if self._stretch.get(name, True):
+                    im = im.resize((w, h))
+                img = _PT.PhotoImage(im)
+            except Exception:
+                try:
+                    img = tk.PhotoImage(file=full)
+                    if self._stretch.get(name, True):
+                        img = _fit(img, w, h)
+                except tk.TclError:
+                    img = None
+        self._images[name] = img
+        wd.configure(image=img if img else "")
+
+    def message(self, text, title="Hinweis"):
+        messagebox.showinfo(title, str(text))
+
+    def ask_yes_no(self, text, title="Frage"):
+        return messagebox.askyesno(title, str(text))
+
+    def close(self):
+        """Fenster schliessen (ruft vorher FormClose auf; False = nicht schliessen)."""
+        if self._in_close:
+            return
+        self._in_close = True
+        try:
+            if self._on_close_fn and self._call(self._on_close_fn) is False:
+                return
+            self.root.destroy()
+        finally:
+            self._in_close = False
+
+    def run(self):
+        self.root.mainloop()
+
+
+if __name__ == "__main__":
+    Window().run()

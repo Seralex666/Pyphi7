@@ -1,0 +1,19 @@
+[package]
+name = "pyphi7"
+version = "0.1.0"
+edition = "2021"
+description = "Pyphi7 - das Delphi-Gefuehl fuer Python (Tkinter / Qt)"
+
+[dependencies]
+eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.17"
+
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
