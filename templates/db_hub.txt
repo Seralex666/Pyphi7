@@ -49,9 +49,18 @@ class _DbHub:
         if self.default == name:
             self.default = next(iter(self.conns), None)
 
+    @staticmethod
+    def _p(params):
+        # (name) ist kein Tupel, sondern nur ein Text: wie (name,) behandeln
+        if params is None:
+            return ()
+        if isinstance(params, (str, bytes)) or not hasattr(params, "__iter__"):
+            return (params,)
+        return tuple(params)
+
     def execute(self, sql, params=(), db=None):
         con = self.get(db)
-        cur = con.execute(sql, tuple(params))
+        cur = con.execute(sql, self._p(params))
         con.commit()
         self.last_id = cur.lastrowid
         return cur.rowcount
@@ -69,7 +78,7 @@ class _DbHub:
         con.commit()
 
     def query(self, sql, params=(), db=None):
-        cur = self.get(db).execute(sql, tuple(params))
+        cur = self.get(db).execute(sql, self._p(params))
         self.cols = [d[0] for d in (cur.description or [])]
         return cur.fetchall()
 

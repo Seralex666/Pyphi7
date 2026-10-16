@@ -149,6 +149,7 @@ Sonderzeichen und SQL-Injection:
 
 ```python
 ui.db_execute("INSERT INTO kontakte (name, telefon) VALUES (?, ?)", (name, telefon))
+# Bei nur einem Wert geht auch ui.db_value("... WHERE name = ?", name); als Tupel schreibst du (name,) mit Komma.
 rows = ui.db_query("SELECT * FROM kontakte WHERE name LIKE ?", ("%" + suche + "%",))
 ```
 
