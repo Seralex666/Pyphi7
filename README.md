@@ -60,6 +60,9 @@ In der Logik: `ui.db_execute`, `ui.db_query`, `ui.show_query("Grid1", sql)` u. a
 
 ## Dokumentation
 
+**Einstieg:** [Tutorial: Zeiterfassung in 10 Minuten](docs/TUTORIAL_ZEITERFASSUNG.md) – Einstempeln/Ausstempeln mit SQLite,
+mit Screenshots (fertiges Projekt: `beispiel/zeiterfassung.pyphi`).
+
 Alle Funktionen, Eigenschaften und Ereignisse der Komponenten: [docs/FUNKTIONEN.md](docs/FUNKTIONEN.md)
 
 ## Komponenten

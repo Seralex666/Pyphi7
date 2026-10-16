@@ -1,0 +1,105 @@
+{
+  "version": 2,
+  "title": "Zeiterfassung",
+  "width": 440,
+  "height": 300,
+  "on_create": "FormCreate",
+  "on_close": "",
+  "color": "",
+  "center": true,
+  "widgets": [
+    {
+      "type": "Database",
+      "name": "Database1",
+      "text": "",
+      "x": 400,
+      "y": 6,
+      "w": 24,
+      "h": 24,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "file": "zeit.db"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "Label1",
+      "text": "Name:",
+      "x": 12,
+      "y": 16,
+      "w": 44,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Entry",
+      "name": "EdName",
+      "text": "",
+      "x": 60,
+      "y": 12,
+      "w": 200,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Button",
+      "name": "BtnIn",
+      "text": "Einstempeln",
+      "x": 12,
+      "y": 46,
+      "w": 120,
+      "h": 28,
+      "enabled": true,
+      "visible": true,
+      "handler": "BtnInClick",
+      "props": {
+        "font_bold": "True"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOut",
+      "text": "Ausstempeln",
+      "x": 140,
+      "y": 46,
+      "w": 120,
+      "h": 28,
+      "enabled": true,
+      "visible": true,
+      "handler": "BtnOutClick",
+      "props": {
+        "font_bold": "True"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "text": "",
+      "x": 280,
+      "y": 52,
+      "w": 150,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Datagrid",
+      "name": "Grid1",
+      "text": "Name|Kommt|Geht|Dauer",
+      "x": 12,
+      "y": 88,
+      "w": 416,
+      "h": 200,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    }
+  ]
+}

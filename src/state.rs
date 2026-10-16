@@ -365,7 +365,8 @@ impl State {
                     pushed = true;
                     self.touch();
                 }
-                if let Some(i) = self.sel {
+                // Ein einfacher Klick (ohne echtes Ziehen) darf nichts verschieben/einrasten
+                if let (true, Some(i)) = (pushed, self.sel) {
                     let w = &mut self.proj.widgets[i];
                     w.x = sn(ox as f32 + dx).min((fw - w.w).max(0)).max(0);
                     w.y = sn(oy as f32 + dy).min((fh - w.h).max(0)).max(0);
@@ -1175,5 +1176,20 @@ mod tests {
         let json = serde_json::to_string(&s.proj).unwrap();
         let back: model::Project = serde_json::from_str(&json).unwrap();
         assert_eq!(back, s.proj);
+    }
+
+    #[test]
+    fn plain_click_does_not_move_or_snap() {
+        let mut s = State::new();
+        click_create(&mut s, WType::Button, 20.0, 20.0);
+        s.proj.widgets[0].x = 13;
+        s.proj.widgets[0].y = 13;
+        s.dirty = false;
+        s.select(None);
+        s.press(20.0, 20.0);
+        s.drag(20.5, 20.5);
+        s.release();
+        assert_eq!((s.proj.widgets[0].x, s.proj.widgets[0].y), (13, 13));
+        assert!(!s.dirty);
     }
 }
