@@ -52,6 +52,24 @@ Voraussetzung: Python und PyInstaller (Knopf Bibliotheken… → Installieren) (
 Eine Windows-`.exe` entsteht nur unter Windows (PyInstaller baut immer für das aktuelle System).
 Das Raster im Formular (Ansicht → Raster anzeigen) ist als Punktraster sichtbar.
 
+## Dunkles Design
+
+Menü **Ansicht > Dunkles Design** schaltet zwischen dem klassischen hellen Look und einem dunklen Design um
+(auch Syntax-Farben im Code-Editor). Die Wahl wird gespeichert. Das Formular selbst bleibt immer hell,
+weil so auch das fertige Tk-/Qt-Fenster aussieht.
+
+![Dunkles Design](docs/img/dunkel_code.png)
+
+## Code in VS Code (oder einem anderen Editor) schreiben
+
+Pyphi7 beobachtet die Datei `<Projekt>_logic.py`. Speicherst du sie in VS Code, übernimmt Pyphi7 den neuen Text
+nach einem Augenblick automatisch in den Code-Editor (Hinweis unter *Meldungen*) – ohne Neu-Laden, ohne Rückfrage.
+
+* Steht im Pyphi7-Editor gerade etwas **Ungespeichertes** und die Datei ändert sich auch von außen, fragt Pyphi7 nach:
+  *Ja* = Datei übernehmen, *Nein* = Editor behalten.
+* Pyphi7 überschreibt deine Datei nie ungefragt. Neue Ereignis-Funktionen (Doppelklick im Formular) hängt es unten an.
+* Das Formular (`.pyphi`) bearbeitest du weiterhin in Pyphi7; die Logik in dem Editor, der dir besser gefällt.
+
 ## Datenbank (SQLite)
 
 Im Palette-Reiter **Daten**: *Database* (SQLite-Datei, wird bei Bedarf angelegt) und *Grid* (Datentabelle).

@@ -5,6 +5,7 @@ use crate::editing;
 use crate::libs;
 use crate::model::{self, WType};
 use crate::pyhl;
+use crate::theme::{self, pal};
 use crate::state::{handle_points, FormEdge, GenResult, Handle, LogKind, LogicPolicy, PropKind, SaveResult, State, View, GRID};
 use eframe::egui::{
     self, pos2, text::CCursor, text::CCursorRange, vec2, Align, Align2, Color32, CornerRadius, CursorIcon, FontId,
@@ -17,13 +18,6 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 const APP_NAME: &str = "Pyphi7";
-const FACE: Color32 = Color32::from_rgb(0xd4, 0xd0, 0xc8);
-const WHITE: Color32 = Color32::WHITE;
-const GRAY: Color32 = Color32::from_rgb(0x80, 0x80, 0x80);
-const DARK: Color32 = Color32::from_rgb(0x40, 0x40, 0x40);
-const BLACK: Color32 = Color32::BLACK;
-const NAVY: Color32 = Color32::from_rgb(0x0a, 0x24, 0x6a);
-const WORKSPACE: Color32 = Color32::from_rgb(0x7b, 0x7b, 0x7b);
 const TITLE_H: f32 = 20.0;
 const OX: f32 = 28.0;
 const OY: f32 = 28.0 + TITLE_H;
@@ -65,6 +59,7 @@ pub enum Action {
     Help,
     CenterH,
     CenterV,
+    ToggleTheme,
 }
 
 enum Modal {
@@ -73,6 +68,8 @@ enum Modal {
     Items { text: String, list: bool },
     SaveChanges(Action),
     LogicConflict(Action),
+    /// Logik-Datei wurde extern geaendert, im Editor steht aber auch Ungespeichertes
+    ExternalChange,
 }
 
 struct Proc {
@@ -104,6 +101,8 @@ pub struct App {
     lib_rx: Receiver<Result<Vec<(String, String, String)>, String>>,
     pip_busy: bool,
     libs_open: bool,
+    dark: bool,
+    last_poll: std::time::Instant,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -131,7 +130,8 @@ fn vline(p: &Painter, x: f32, y1: f32, y2: f32, c: Color32) {
 /// Win9x-Rahmen. Koordinaten sind inklusive (x2/y2 = letzter Pixel).
 fn bevel(p: &Painter, x1: f32, y1: f32, x2: f32, y2: f32, sunken: bool, face: Color32) {
     fill(p, x1, y1, x2, y2, face);
-    let (otl, obr, itl, ibr) = if sunken { (GRAY, WHITE, DARK, FACE) } else { (WHITE, BLACK, FACE, GRAY) };
+    let k = pal();
+    let (otl, obr, itl, ibr) = if sunken { (k.mid, k.hi, k.low, k.face) } else { (k.hi, k.out, k.face, k.mid) };
     hline(p, x1, x2, y1, otl);
     vline(p, x1, y1, y2, otl);
     hline(p, x1, x2, y2, obr);
@@ -148,13 +148,14 @@ fn rect_bevel(p: &Painter, r: Rect, sunken: bool, face: Color32) {
 
 fn fit(p: &Painter, text: &str, font: &FontId, width: f32) -> String {
     let mut s = text.to_string();
-    while !s.is_empty() && p.layout_no_wrap(s.clone(), font.clone(), BLACK).size().x > width {
+    while !s.is_empty() && p.layout_no_wrap(s.clone(), font.clone(), pal().black).size().x > width {
         s.pop();
     }
     s
 }
 
 fn paint_icon(p: &Painter, r: Rect, kind: Option<WType>, font: &FontId) {
+    let _light = theme::Light::on();
     let c = r.center();
     let (x1, y1) = (c.x - 9.0, c.y - 7.0);
     let (x2, y2) = (c.x + 9.0, c.y + 7.0);
@@ -170,75 +171,75 @@ fn paint_icon(p: &Painter, r: Rect, kind: Option<WType>, font: &FontId) {
                 o + vec2(5.5, 9.5),
                 o + vec2(10.0, 9.5),
             ];
-            p.add(egui::Shape::convex_polygon(pts, WHITE, Stroke::new(1.0, BLACK)));
+            p.add(egui::Shape::convex_polygon(pts, pal().white, Stroke::new(1.0, pal().black)));
         }
         Some(WType::Label) => {
-            p.text(c, Align2::CENTER_CENTER, "A", FontId::proportional(17.0), NAVY);
+            p.text(c, Align2::CENTER_CENTER, "A", FontId::proportional(17.0), pal().navy);
         }
         Some(WType::Entry) => {
-            bevel(p, x1, y1 + 1.0, x2, y2 - 1.0, true, WHITE);
-            p.text(c, Align2::CENTER_CENTER, "ab|", FontId::proportional(11.0), BLACK);
+            bevel(p, x1, y1 + 1.0, x2, y2 - 1.0, true, pal().white);
+            p.text(c, Align2::CENTER_CENTER, "ab|", FontId::proportional(11.0), pal().black);
         }
         Some(WType::Text) => {
-            bevel(p, x1, y1 - 1.0, x2, y2 + 1.0, true, WHITE);
+            bevel(p, x1, y1 - 1.0, x2, y2 + 1.0, true, pal().white);
             for i in 0..3 {
-                hline(p, x1 + 3.0, x2 - 3.0 - (i as f32) * 3.0, y1 + 3.0 + i as f32 * 4.0, BLACK);
+                hline(p, x1 + 3.0, x2 - 3.0 - (i as f32) * 3.0, y1 + 3.0 + i as f32 * 4.0, pal().black);
             }
         }
         Some(WType::Button) => {
-            bevel(p, x1, y1, x2, y2, false, FACE);
-            p.text(c, Align2::CENTER_CENTER, "OK", FontId::proportional(10.0), BLACK);
+            bevel(p, x1, y1, x2, y2, false, pal().face);
+            p.text(c, Align2::CENTER_CENTER, "OK", FontId::proportional(10.0), pal().black);
         }
         Some(WType::Checkbox) => {
-            bevel(p, c.x - 6.0, c.y - 6.0, c.x + 6.0, c.y + 6.0, true, WHITE);
+            bevel(p, c.x - 6.0, c.y - 6.0, c.x + 6.0, c.y + 6.0, true, pal().white);
             let pts = [pos2(c.x - 3.5, c.y), pos2(c.x - 1.0, c.y + 3.0), pos2(c.x + 4.0, c.y - 3.5)];
-            p.line_segment([pts[0], pts[1]], Stroke::new(2.0, BLACK));
-            p.line_segment([pts[1], pts[2]], Stroke::new(2.0, BLACK));
+            p.line_segment([pts[0], pts[1]], Stroke::new(2.0, pal().black));
+            p.line_segment([pts[1], pts[2]], Stroke::new(2.0, pal().black));
         }
         Some(WType::Listbox) => {
-            bevel(p, x1 + 1.0, y1 - 1.0, x2 - 1.0, y2 + 1.0, true, WHITE);
+            bevel(p, x1 + 1.0, y1 - 1.0, x2 - 1.0, y2 + 1.0, true, pal().white);
             for i in 0..3 {
-                hline(p, x1 + 4.0, x2 - 4.0 - (i as f32) * 2.0, y1 + 3.0 + i as f32 * 4.0, BLACK);
+                hline(p, x1 + 4.0, x2 - 4.0 - (i as f32) * 2.0, y1 + 3.0 + i as f32 * 4.0, pal().black);
             }
         }
         Some(WType::Combobox) => {
-            bevel(p, x1, y1 + 1.0, x2, y2 - 1.0, true, WHITE);
-            bevel(p, x2 - 8.0, y1 + 3.0, x2 - 2.0, y2 - 3.0, false, FACE);
+            bevel(p, x1, y1 + 1.0, x2, y2 - 1.0, true, pal().white);
+            bevel(p, x2 - 8.0, y1 + 3.0, x2 - 2.0, y2 - 3.0, false, pal().face);
             let a = pos2(x2 - 5.0, c.y + 1.0);
-            p.add(egui::Shape::convex_polygon(vec![a + vec2(-2.5, -1.5), a + vec2(2.5, -1.5), a + vec2(0.0, 1.5)], BLACK, Stroke::NONE));
+            p.add(egui::Shape::convex_polygon(vec![a + vec2(-2.5, -1.5), a + vec2(2.5, -1.5), a + vec2(0.0, 1.5)], pal().black, Stroke::NONE));
         }
         Some(WType::Radiobutton) => {
-            p.circle_filled(c, 6.5, WHITE);
-            p.circle_stroke(c, 6.5, Stroke::new(1.0, GRAY));
-            p.circle_filled(c, 2.5, BLACK);
+            p.circle_filled(c, 6.5, pal().white);
+            p.circle_stroke(c, 6.5, Stroke::new(1.0, pal().gray));
+            p.circle_filled(c, 2.5, pal().black);
         }
         Some(WType::Groupbox) => {
             let r = Rect::from_min_max(pos2(x1, y1 + 1.0), pos2(x2, y2 + 2.0));
-            p.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, GRAY), egui::StrokeKind::Inside);
-            fill(p, x1 + 3.0, y1 - 1.0, x1 + 9.0, y1 + 3.0, FACE);
-            hline(p, x1 + 4.0, x1 + 8.0, y1 + 1.0, BLACK);
+            p.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, pal().gray), egui::StrokeKind::Inside);
+            fill(p, x1 + 3.0, y1 - 1.0, x1 + 9.0, y1 + 3.0, pal().face);
+            hline(p, x1 + 4.0, x1 + 8.0, y1 + 1.0, pal().black);
         }
         Some(WType::Panel) => {
-            bevel(p, x1, y1 - 1.0, x2, y2 + 1.0, false, FACE);
+            bevel(p, x1, y1 - 1.0, x2, y2 + 1.0, false, pal().face);
         }
         Some(WType::Progressbar) => {
-            bevel(p, x1, c.y - 4.0, x2, c.y + 4.0, true, FACE);
+            bevel(p, x1, c.y - 4.0, x2, c.y + 4.0, true, pal().face);
             for i in 0..3 {
-                fill(p, x1 + 2.0 + i as f32 * 5.0, c.y - 2.0, x1 + 5.0 + i as f32 * 5.0, c.y + 2.0, NAVY);
+                fill(p, x1 + 2.0 + i as f32 * 5.0, c.y - 2.0, x1 + 5.0 + i as f32 * 5.0, c.y + 2.0, pal().navy);
             }
         }
         Some(WType::Trackbar) => {
-            bevel(p, x1, c.y - 1.0, x2, c.y + 1.0, true, FACE);
-            bevel(p, c.x - 2.0, c.y - 6.0, c.x + 3.0, c.y + 6.0, false, FACE);
+            bevel(p, x1, c.y - 1.0, x2, c.y + 1.0, true, pal().face);
+            bevel(p, c.x - 2.0, c.y - 6.0, c.x + 3.0, c.y + 6.0, false, pal().face);
         }
         Some(WType::Spinedit) => {
-            bevel(p, x1, y1, x2, y2, true, WHITE);
-            bevel(p, x2 - 8.0, y1 + 2.0, x2 - 2.0, c.y, false, FACE);
-            bevel(p, x2 - 8.0, c.y, x2 - 2.0, y2 - 2.0, false, FACE);
-            p.text(pos2(x1 + 5.0, c.y), Align2::LEFT_CENTER, "0", FontId::proportional(10.0), BLACK);
+            bevel(p, x1, y1, x2, y2, true, pal().white);
+            bevel(p, x2 - 8.0, y1 + 2.0, x2 - 2.0, c.y, false, pal().face);
+            bevel(p, x2 - 8.0, c.y, x2 - 2.0, y2 - 2.0, false, pal().face);
+            p.text(pos2(x1 + 5.0, c.y), Align2::LEFT_CENTER, "0", FontId::proportional(10.0), pal().black);
         }
         Some(WType::Image) => {
-            bevel(p, x1 + 1.0, y1 - 1.0, x2 - 1.0, y2 + 1.0, true, WHITE);
+            bevel(p, x1 + 1.0, y1 - 1.0, x2 - 1.0, y2 + 1.0, true, pal().white);
             p.circle_filled(pos2(x2 - 5.0, y1 + 3.0), 2.0, Color32::from_rgb(0xe0, 0xa0, 0x00));
             p.add(egui::Shape::convex_polygon(
                 vec![pos2(x1 + 3.0, y2), pos2(x1 + 9.0, y1 + 5.0), pos2(x1 + 13.0, y2)],
@@ -249,8 +250,8 @@ fn paint_icon(p: &Painter, r: Rect, kind: Option<WType>, font: &FontId) {
         Some(WType::Database) => {
             let (ex, ey) = (6.5, 2.5);
             fill(p, c.x - ex, c.y - 4.5, c.x + ex, c.y + 4.5, Color32::from_rgb(0xc8, 0xd8, 0xf0));
-            vline(p, c.x - ex, c.y - 4.5, c.y + 4.5, DARK);
-            vline(p, c.x + ex, c.y - 4.5, c.y + 4.5, DARK);
+            vline(p, c.x - ex, c.y - 4.5, c.y + 4.5, pal().dark);
+            vline(p, c.x + ex, c.y - 4.5, c.y + 4.5, pal().dark);
             for dy in [-4.5f32, 0.0, 4.5] {
                 let top = pos2(c.x, c.y + dy);
                 let mut pts = Vec::new();
@@ -258,41 +259,42 @@ fn paint_icon(p: &Painter, r: Rect, kind: Option<WType>, font: &FontId) {
                     let a = std::f32::consts::PI * (i as f32) / 12.0;
                     pts.push(top + vec2(-ex * a.cos(), if dy < 0.0 { -ey * a.sin() } else { ey * a.sin() }));
                 }
-                p.add(egui::Shape::line(pts, Stroke::new(1.0, DARK)));
+                p.add(egui::Shape::line(pts, Stroke::new(1.0, pal().dark)));
             }
             p.add(egui::Shape::closed_line(
                 (0..16).map(|i| {
                     let a = std::f32::consts::TAU * (i as f32) / 16.0;
                     pos2(c.x + ex * a.cos(), c.y - 4.5 + ey * a.sin())
                 }).collect(),
-                Stroke::new(1.0, DARK),
+                Stroke::new(1.0, pal().dark),
             ));
         }
         Some(WType::Datagrid) => {
-            bevel(p, x1, y1 - 1.0, x2, y2 + 1.0, true, WHITE);
-            fill(p, x1 + 2.0, y1 + 1.0, x2 - 2.0, y1 + 4.0, FACE);
-            vline(p, c.x, y1 + 1.0, y2 - 1.0, GRAY);
+            bevel(p, x1, y1 - 1.0, x2, y2 + 1.0, true, pal().white);
+            fill(p, x1 + 2.0, y1 + 1.0, x2 - 2.0, y1 + 4.0, pal().face);
+            vline(p, c.x, y1 + 1.0, y2 - 1.0, pal().gray);
             for i in 0..3 {
-                hline(p, x1 + 2.0, x2 - 2.0, y1 + 4.0 + i as f32 * 3.0, GRAY);
+                hline(p, x1 + 2.0, x2 - 2.0, y1 + 4.0 + i as f32 * 3.0, pal().gray);
             }
         }
         Some(WType::Timer) => {
-            p.circle_filled(c, 7.0, WHITE);
-            p.circle_stroke(c, 7.0, Stroke::new(1.0, BLACK));
-            p.line_segment([c, c + vec2(0.0, -5.0)], Stroke::new(1.0, BLACK));
-            p.line_segment([c, c + vec2(3.5, 1.0)], Stroke::new(1.0, BLACK));
+            p.circle_filled(c, 7.0, pal().white);
+            p.circle_stroke(c, 7.0, Stroke::new(1.0, pal().black));
+            p.line_segment([c, c + vec2(0.0, -5.0)], Stroke::new(1.0, pal().black));
+            p.line_segment([c, c + vec2(3.5, 1.0)], Stroke::new(1.0, pal().black));
         }
     }
     let _ = font;
 }
 
 /// Klassischer Werkzeug-Knopf: erhaben, gedrueckt/gewaehlt = eingedrueckt.
-fn tool_button(ui: &mut Ui, size: egui::Vec2, selected: bool, paint: impl FnOnce(&Painter, Rect)) -> egui::Response {
+fn tool_button(ui: &mut Ui, size: egui::Vec2, selected: bool, light: bool, paint: impl FnOnce(&Painter, Rect)) -> egui::Response {
+    let _light = if light { Some(theme::Light::on()) } else { None };
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let down = resp.is_pointer_button_down_on();
     let sunken = selected || down;
     let p = ui.painter();
-    rect_bevel(p, rect, sunken, if selected { Color32::from_rgb(0xf4, 0xf2, 0xec) } else { FACE });
+    rect_bevel(p, rect, sunken, if selected { Color32::from_rgb(0xf4, 0xf2, 0xec) } else { pal().face });
     let inner = if sunken { rect.translate(vec2(1.0, 1.0)) } else { rect };
     paint(p, inner);
     resp
@@ -323,6 +325,8 @@ fn char_to_byte(s: &str, ci: usize) -> usize {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, open: Option<PathBuf>) -> Self {
+        let dark = crate::settings::load().dark;
+        theme::set_dark(dark);
         setup_style(&cc.egui_ctx);
         let (tx, rx) = channel();
         let (lib_tx, lib_rx) = channel();
@@ -356,6 +360,8 @@ impl App {
             lib_rx,
             pip_busy: false,
             libs_open: false,
+            dark,
+            last_poll: std::time::Instant::now(),
         }
     }
 
@@ -396,6 +402,12 @@ impl App {
                 self.stop_all();
                 self.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            Action::ToggleTheme => {
+                self.dark = !self.dark;
+                theme::set_dark(self.dark);
+                apply_visuals(ctx);
+                crate::settings::save(&crate::settings::Settings { dark: self.dark });
             }
             Action::ToggleView => {
                 self.st.view = if self.st.view == View::Form { View::Code } else { View::Form };
@@ -645,7 +657,7 @@ impl App {
         };
         let mut todo: Option<(&'static str, Vec<String>)> = None;
         let mut reload = false;
-        egui::Frame::NONE.fill(WHITE).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
+        egui::Frame::NONE.fill(pal().white).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
             ui.heading("Zusatz-Bibliotheken (pip)");
             ui.label("Pakete werden in den Python-Interpreter installiert, mit dem Pyphi7 deine Programme startet.");
             ui.horizontal(|ui| {
@@ -659,7 +671,7 @@ impl App {
                         ui.spinner();
                     }
                     LibsState::Failed => {
-                        ui.colored_label(Color32::from_rgb(0xa0, 0, 0), "pip nicht erreichbar");
+                        ui.colored_label(pal().err, "pip nicht erreichbar");
                     }
                     _ => {}
                 }
@@ -676,8 +688,8 @@ impl App {
                     let ver = installed(&self.libs, l.pkg);
                     ui.label(egui::RichText::new(l.pkg).strong());
                     match &ver {
-                        Some(v) => ui.colored_label(Color32::from_rgb(0, 0x70, 0), format!("installiert {}", v)),
-                        None => ui.colored_label(GRAY, "nicht installiert"),
+                        Some(v) => ui.colored_label(pal().ok, format!("installiert {}", v)),
+                        None => ui.colored_label(pal().gray, "nicht installiert"),
                     };
                     ui.label(l.info);
                     ui.horizontal(|ui| {
@@ -704,7 +716,7 @@ impl App {
             egui::Grid::new("libs_builtin").num_columns(3).spacing([14.0, 4.0]).striped(true).show(ui, |ui| {
                 for l in libs::BUILTIN {
                     ui.label(egui::RichText::new(l.pkg).strong());
-                    ui.colored_label(Color32::from_rgb(0, 0x70, 0), "eingebaut");
+                    ui.colored_label(pal().ok, "eingebaut");
                     ui.label(l.info);
                     ui.end_row();
                 }
@@ -875,6 +887,12 @@ impl App {
                 ui.separator();
                 ui.checkbox(&mut self.st.show_grid, "Raster anzeigen");
                 ui.checkbox(&mut self.st.snap, "Am Raster ausrichten");
+                ui.separator();
+                let mut dark = self.dark;
+                if ui.checkbox(&mut dark, "Dunkles Design").changed() {
+                    act = Some(Action::ToggleTheme);
+                    ui.close();
+                }
             });
             ui.menu_button("Projekt", |ui| {
                 item(ui, "Code erzeugen", "Strg+F9", Action::Generate, &mut act);
@@ -907,9 +925,9 @@ impl App {
                         ("Öffnen", Action::Open, "Projekt öffnen (Strg+O)"),
                         ("Speichern", Action::Save, "Alles speichern (Strg+S)"),
                     ] {
-                        let w = 14.0 + ui.painter().layout_no_wrap(label.into(), font.clone(), BLACK).size().x;
-                        let r = tool_button(ui, vec2(w, 24.0), false, |p, rc| {
-                            p.text(rc.center(), Align2::CENTER_CENTER, label, font.clone(), BLACK);
+                        let w = 14.0 + ui.painter().layout_no_wrap(label.into(), font.clone(), pal().black).size().x;
+                        let r = tool_button(ui, vec2(w, 24.0), false, false, |p, rc| {
+                            p.text(rc.center(), Align2::CENTER_CENTER, label, font.clone(), pal().black);
                         });
                         if r.clicked() {
                             self.queue.push(a);
@@ -920,14 +938,14 @@ impl App {
                     }
                 });
                 ui.horizontal(|ui| {
-                    let r = tool_button(ui, vec2(62.0, 24.0), false, |p, rc| {
+                    let r = tool_button(ui, vec2(62.0, 24.0), false, false, |p, rc| {
                         let c = pos2(rc.min.x + 14.0, rc.center().y);
                         p.add(egui::Shape::convex_polygon(
                             vec![c + vec2(-4.0, -6.0), c + vec2(-4.0, 6.0), c + vec2(5.0, 0.0)],
                             Color32::from_rgb(0x00, 0x80, 0x00),
-                            Stroke::new(1.0, BLACK),
+                            Stroke::new(1.0, pal().black),
                         ));
-                        p.text(pos2(rc.min.x + 22.0, rc.center().y), Align2::LEFT_CENTER, "Start", font.clone(), BLACK);
+                        p.text(pos2(rc.min.x + 22.0, rc.center().y), Align2::LEFT_CENTER, "Start", font.clone(), pal().black);
                     });
                     if r.clicked() {
                         self.queue.push(Action::Run);
@@ -935,7 +953,7 @@ impl App {
                     if r.hovered() {
                         self.hint = "Code erzeugen und starten (F9)".into();
                     }
-                    let r = tool_button(ui, vec2(26.0, 24.0), false, |p, rc| {
+                    let r = tool_button(ui, vec2(26.0, 24.0), false, false, |p, rc| {
                         let c = rc.center();
                         fill(p, c.x - 5.0, c.y - 5.0, c.x + 4.0, c.y + 4.0, Color32::from_rgb(0xa0, 0x00, 0x00));
                     });
@@ -964,25 +982,25 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                     for (i, (name, _)) in model::PALETTE.iter().enumerate() {
-                        let tw = ui.painter().layout_no_wrap(name.to_string(), font.clone(), BLACK).size().x;
+                        let tw = ui.painter().layout_no_wrap(name.to_string(), font.clone(), pal().black).size().x;
                         let (r, resp) = ui.allocate_exact_size(vec2(tw + 18.0, 20.0), Sense::click());
                         let active = self.pal_tab == i;
                         let top = if active { r.min.y } else { r.min.y + 2.0 };
                         let p = ui.painter();
-                        bevel(p, r.min.x, top, r.max.x - 1.0, r.max.y + 1.0, false, FACE);
-                        p.text(pos2(r.center().x, (top + r.max.y) / 2.0), Align2::CENTER_CENTER, *name, font.clone(), BLACK);
+                        bevel(p, r.min.x, top, r.max.x - 1.0, r.max.y + 1.0, false, pal().face);
+                        p.text(pos2(r.center().x, (top + r.max.y) / 2.0), Align2::CENTER_CENTER, *name, font.clone(), pal().black);
                         if resp.clicked() {
                             self.pal_tab = i;
                         }
                     }
                     // "Bibliotheken": kein Reiter, sondern ein Knopf, der die Paketverwaltung oeffnet
                     ui.add_space(8.0);
-                    let tw = ui.painter().layout_no_wrap("Bibliotheken…".to_string(), font.clone(), BLACK).size().x;
+                    let tw = ui.painter().layout_no_wrap("Bibliotheken…".to_string(), font.clone(), pal().black).size().x;
                     let (r, resp) = ui.allocate_exact_size(vec2(tw + 18.0, 20.0), Sense::click());
                     let pressed = resp.is_pointer_button_down_on() || self.libs_open;
                     let p = ui.painter();
-                    bevel(p, r.min.x, r.min.y + 1.0, r.max.x - 1.0, r.max.y + 1.0, pressed, FACE);
-                    p.text(pos2(r.center().x, r.center().y + 1.0), Align2::CENTER_CENTER, "Bibliotheken…", font.clone(), BLACK);
+                    bevel(p, r.min.x, r.min.y + 1.0, r.max.x - 1.0, r.max.y + 1.0, pressed, pal().face);
+                    p.text(pos2(r.center().x, r.center().y + 1.0), Align2::CENTER_CENTER, "Bibliotheken…", font.clone(), pal().black);
                     if resp.clicked() {
                         self.libs_open = true;
                     }
@@ -990,7 +1008,7 @@ impl App {
                 });
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
-                    let r = tool_button(ui, vec2(34.0, 30.0), self.st.tool.is_none(), |p, rc| {
+                    let r = tool_button(ui, vec2(34.0, 30.0), self.st.tool.is_none(), true, |p, rc| {
                         paint_icon(p, rc, None, &font);
                     });
                     if r.clicked() {
@@ -1001,7 +1019,7 @@ impl App {
                     }
                     for &wt in model::PALETTE[self.pal_tab.min(model::PALETTE.len() - 1)].1 {
                         let sel = self.st.tool == Some(wt);
-                        let r = tool_button(ui, vec2(34.0, 30.0), sel, |p, rc| {
+                        let r = tool_button(ui, vec2(34.0, 30.0), sel, true, |p, rc| {
                             paint_icon(p, rc, Some(wt), &font);
                         });
                         if r.clicked() {
@@ -1021,47 +1039,62 @@ impl App {
     fn code_outline(&mut self, ui: &mut Ui) {
         enum Go {
             Def(String),
-            Create(Option<usize>, &'static str),
         }
         let mut go: Option<Go> = None;
         let logic = self.st.logic.clone();
         let has = |n: &str| codegen::has_def(&logic, n);
-        let dim = Color32::from_rgb(0x80, 0x80, 0x80);
-        let entry = |ui: &mut Ui, go: &mut Option<Go>, label: &str, ev: &str, func: &str, target: Option<usize>, ev_key: &'static str| {
-            let exists = !func.is_empty() && has(func);
-            let text = if func.is_empty() {
-                egui::RichText::new(format!("{}  (neu)", ev)).color(dim)
-            } else if exists {
+        let dim = pal().gray;
+        // Nur Ereignisse, die schon benutzt werden. Neue Funktionen entstehen nie durch Anklicken
+        // hier, sondern per Doppelklick im Formular / im Objektinspektor (Reiter Ereignisse).
+        let entry = |ui: &mut Ui, go: &mut Option<Go>, ev: &str, func: &str| {
+            if func.is_empty() {
+                return;
+            }
+            let exists = has(func);
+            let text = if exists {
                 egui::RichText::new(format!("{}  >  {}", ev, func)).strong()
             } else {
-                egui::RichText::new(format!("{}  >  {}  (fehlt)", ev, func)).color(Color32::from_rgb(0xa0, 0, 0))
+                egui::RichText::new(format!("{}  >  {}  (fehlt)", ev, func)).color(pal().err)
             };
-            let _ = label;
-            if ui.add(egui::Button::new(text).frame(false)).clicked() {
-                *go = Some(if func.is_empty() { Go::Create(target, ev_key) } else { Go::Def(func.to_string()) });
+            let r = ui.add(egui::Button::new(text).frame(false));
+            if exists && r.clicked() {
+                *go = Some(Go::Def(func.to_string()));
+            } else if !exists {
+                let r = r.on_hover_text("Funktion fehlt im Code - Doppelklick legt sie an");
+                if r.double_clicked() {
+                    *go = Some(Go::Def(func.to_string()));
+                }
             }
         };
+        let _ = dim;
         ui.add_space(4.0);
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             ui.label(egui::RichText::new("Objekte und Funktionen").strong());
-            egui::CollapsingHeader::new(format!("{}: TForm", FORM_CLASS)).id_salt("ol_form").default_open(true).show(ui, |ui| {
-                let (c, cl) = (self.st.proj.on_create.clone(), self.st.proj.on_close.clone());
-                entry(ui, &mut go, "", "OnCreate", &c, None, "OnCreate");
-                entry(ui, &mut go, "", "OnClose", &cl, None, "OnClose");
-            });
+            let (c, cl) = (self.st.proj.on_create.clone(), self.st.proj.on_close.clone());
+            let mut shown = false;
+            if !c.is_empty() || !cl.is_empty() {
+                shown = true;
+                egui::CollapsingHeader::new(egui::RichText::new(format!("{}: TForm", FORM_CLASS)).strong()).id_salt("ol_form").default_open(true).show(ui, |ui| {
+                    entry(ui, &mut go, "OnCreate", &c);
+                    entry(ui, &mut go, "OnClose", &cl);
+                });
+            }
             for i in 0..self.st.proj.widgets.len() {
                 let wd = &self.st.proj.widgets[i];
                 let head = format!("{}: {}", wd.name, wd.wtype.info().cls);
                 let evs: Vec<(&'static str, String)> = wd.wtype.events().iter().map(|e| (e.name, wd.event_fn(e.name))).collect();
-                if evs.is_empty() {
+                if !evs.iter().any(|(_, f)| !f.is_empty()) {
                     continue;
                 }
-                let any = evs.iter().any(|(_, f)| !f.is_empty());
-                egui::CollapsingHeader::new(if any { egui::RichText::new(head).strong() } else { egui::RichText::new(head) }).id_salt(("ol_w", i)).default_open(any).show(ui, |ui| {
+                shown = true;
+                egui::CollapsingHeader::new(egui::RichText::new(head).strong()).id_salt(("ol_w", i)).default_open(true).show(ui, |ui| {
                     for (name, func) in &evs {
-                        entry(ui, &mut go, "", name, func, Some(i), name);
+                        entry(ui, &mut go, name, func);
                     }
                 });
+            }
+            if !shown {
+                ui.label(egui::RichText::new("Noch keine Ereignisse.\nDoppelklick auf eine Komponente (oder\nauf ein Ereignis im Objektinspektor,\nReiter Ereignisse) legt eine Funktion an.").weak());
             }
             // eigene Funktionen (alles, was nicht zu einem Ereignis gehoert)
             let handlers = codegen::handler_names(&self.st.proj);
@@ -1089,7 +1122,6 @@ impl App {
                 self.st.ensure_stub(&n);
                 self.st.goto_def(&n);
             }
-            Some(Go::Create(t, ev)) => self.st.create_event(t, Some(ev)),
             None => {}
         }
     }
@@ -1098,10 +1130,10 @@ impl App {
         let font = FontId::proportional(13.0);
         let (title_rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::hover());
         let p = ui.painter();
-        fill(p, title_rect.min.x, title_rect.min.y, title_rect.max.x - 1.0, title_rect.max.y - 1.0, NAVY);
+        fill(p, title_rect.min.x, title_rect.min.y, title_rect.max.x - 1.0, title_rect.max.y - 1.0, pal().navy);
         let t = "Objektinspektor";
-        p.text(title_rect.min + vec2(5.0, 10.0), Align2::LEFT_CENTER, t, font.clone(), WHITE);
-        p.text(title_rect.min + vec2(6.0, 10.0), Align2::LEFT_CENTER, t, font.clone(), WHITE);
+        p.text(title_rect.min + vec2(5.0, 10.0), Align2::LEFT_CENTER, t, font.clone(), Color32::WHITE);
+        p.text(title_rect.min + vec2(6.0, 10.0), Align2::LEFT_CENTER, t, font.clone(), Color32::WHITE);
 
         if self.st.view == View::Code {
             self.code_outline(ui);
@@ -1155,10 +1187,10 @@ impl App {
                 for row in rows {
                     let (rect, _) = ui.allocate_exact_size(vec2(total_w - 4.0, 20.0), Sense::hover());
                     let p = ui.painter();
-                    fill(p, rect.min.x, rect.min.y, rect.max.x - 1.0, rect.max.y - 1.0, WHITE);
-                    hline(p, rect.min.x, rect.max.x, rect.max.y - 1.0, Color32::from_rgb(0xe0, 0xe0, 0xe0));
-                    vline(p, rect.min.x + label_w, rect.min.y, rect.max.y - 1.0, Color32::from_rgb(0xc0, 0xc0, 0xc0));
-                    p.text(rect.min + vec2(4.0, 10.0), Align2::LEFT_CENTER, &row.label, font.clone(), BLACK);
+                    fill(p, rect.min.x, rect.min.y, rect.max.x - 1.0, rect.max.y - 1.0, pal().white);
+                    hline(p, rect.min.x, rect.max.x, rect.max.y - 1.0, pal().line1);
+                    vline(p, rect.min.x + label_w, rect.min.y, rect.max.y - 1.0, pal().line2);
+                    p.text(rect.min + vec2(4.0, 10.0), Align2::LEFT_CENTER, &row.label, font.clone(), pal().black);
                     let mut vrect = Rect::from_min_max(rect.min + vec2(label_w + 2.0, 0.0), rect.max);
                     let has_btn = matches!(row.kind, PropKind::Items | PropKind::File | PropKind::Color);
                     let btn_rect = Rect::from_min_max(pos2(rect.max.x - 24.0, rect.min.y + 1.0), pos2(rect.max.x - 2.0, rect.max.y - 2.0));
@@ -1169,7 +1201,7 @@ impl App {
                     match row.kind {
                         PropKind::Bool => {
                             let r = ui.interact(vrect, ui.id().with(("b", &key)), Sense::click());
-                            ui.painter().text(vrect.min + vec2(3.0, 10.0), Align2::LEFT_CENTER, &row.value, font.clone(), BLACK);
+                            ui.painter().text(vrect.min + vec2(3.0, 10.0), Align2::LEFT_CENTER, &row.value, font.clone(), pal().black);
                             if r.clicked() {
                                 self.commit_edit();
                                 let v = if row.value == "True" { "False" } else { "True" };
@@ -1296,10 +1328,10 @@ impl App {
                 for (key, label, value) in rows {
                     let (rect, resp) = ui.allocate_exact_size(vec2(total_w - 4.0, 20.0), Sense::click());
                     let p = ui.painter();
-                    fill(p, rect.min.x, rect.min.y, rect.max.x - 1.0, rect.max.y - 1.0, WHITE);
-                    vline(p, rect.min.x + label_w, rect.min.y, rect.max.y - 1.0, Color32::from_rgb(0xc0, 0xc0, 0xc0));
-                    p.text(rect.min + vec2(4.0, 10.0), Align2::LEFT_CENTER, &label, font.clone(), BLACK);
-                    p.text(rect.min + vec2(label_w + 5.0, 10.0), Align2::LEFT_CENTER, &value, font.clone(), BLACK);
+                    fill(p, rect.min.x, rect.min.y, rect.max.x - 1.0, rect.max.y - 1.0, pal().white);
+                    vline(p, rect.min.x + label_w, rect.min.y, rect.max.y - 1.0, pal().line2);
+                    p.text(rect.min + vec2(4.0, 10.0), Align2::LEFT_CENTER, &label, font.clone(), pal().black);
+                    p.text(rect.min + vec2(label_w + 5.0, 10.0), Align2::LEFT_CENTER, &value, font.clone(), pal().black);
                     if resp.double_clicked() {
                         let sel = self.st.sel;
                         self.st.create_event(sel, Some(&key));
@@ -1428,36 +1460,37 @@ impl App {
             });
 
             // ---- Zeichnen
-            painter.rect_filled(rect, CornerRadius::ZERO, WORKSPACE);
+            painter.rect_filled(rect, CornerRadius::ZERO, pal().workspace);
+            let _light = theme::Light::on(); // das Formular zeigt das Tk-/Qt-Fenster: immer hell
             let (fx0, fy0) = (org.x.round(), org.y.round());
             // Rahmen + Titelleiste
-            bevel(&painter, fx0 - 4.0, fy0 - TITLE_H - 4.0, fx0 + w + 3.0, fy0 + h + 3.0, false, FACE);
-            fill(&painter, fx0, fy0 - TITLE_H, fx0 + w - 1.0, fy0 - 1.0, NAVY);
+            bevel(&painter, fx0 - 4.0, fy0 - TITLE_H - 4.0, fx0 + w + 3.0, fy0 + h + 3.0, false, pal().face);
+            fill(&painter, fx0, fy0 - TITLE_H, fx0 + w - 1.0, fy0 - 1.0, pal().navy);
             let cap = &self.st.proj.title;
-            painter.text(pos2(fx0 + 6.0, fy0 - TITLE_H / 2.0), Align2::LEFT_CENTER, cap, font.clone(), WHITE);
-            painter.text(pos2(fx0 + 7.0, fy0 - TITLE_H / 2.0), Align2::LEFT_CENTER, cap, font.clone(), WHITE);
+            painter.text(pos2(fx0 + 6.0, fy0 - TITLE_H / 2.0), Align2::LEFT_CENTER, cap, font.clone(), pal().white);
+            painter.text(pos2(fx0 + 7.0, fy0 - TITLE_H / 2.0), Align2::LEFT_CENTER, cap, font.clone(), pal().white);
             let cx = fx0 + w - 19.0;
             for (k, bx) in [cx - 34.0, cx - 18.0, cx].into_iter().enumerate() {
-                bevel(&painter, bx, fy0 - TITLE_H + 3.0, bx + 15.0, fy0 - 4.0, false, FACE);
+                bevel(&painter, bx, fy0 - TITLE_H + 3.0, bx + 15.0, fy0 - 4.0, false, pal().face);
                 let c = pos2(bx + 7.5, fy0 - TITLE_H / 2.0 + 0.5);
                 match k {
-                    0 => hline(&painter, c.x - 3.0, c.x + 3.0, c.y + 3.0, BLACK),
+                    0 => hline(&painter, c.x - 3.0, c.x + 3.0, c.y + 3.0, pal().black),
                     1 => {
-                        painter.rect_stroke(Rect::from_center_size(c, vec2(8.0, 7.0)), CornerRadius::ZERO, Stroke::new(1.0, BLACK), egui::StrokeKind::Inside);
+                        painter.rect_stroke(Rect::from_center_size(c, vec2(8.0, 7.0)), CornerRadius::ZERO, Stroke::new(1.0, pal().black), egui::StrokeKind::Inside);
                     }
                     _ => {
-                        painter.line_segment([c + vec2(-3.0, -3.0), c + vec2(3.0, 3.0)], Stroke::new(1.5, BLACK));
-                        painter.line_segment([c + vec2(-3.0, 3.0), c + vec2(3.0, -3.0)], Stroke::new(1.5, BLACK));
+                        painter.line_segment([c + vec2(-3.0, -3.0), c + vec2(3.0, 3.0)], Stroke::new(1.5, pal().black));
+                        painter.line_segment([c + vec2(-3.0, 3.0), c + vec2(3.0, -3.0)], Stroke::new(1.5, pal().black));
                     }
                 }
             }
-            let form_face = parse_hex(&self.st.proj.color).unwrap_or(FACE);
+            let form_face = parse_hex(&self.st.proj.color).unwrap_or(pal().face);
             fill(&painter, fx0, fy0, fx0 + w - 1.0, fy0 + h - 1.0, form_face);
             if self.st.show_grid {
                 let step = if w * h > 600_000.0 { 2 * GRID } else { GRID } as usize;
                 for x in (0..self.st.proj.width).step_by(step) {
                     for y in (0..self.st.proj.height).step_by(step) {
-                        fill(&painter, fx0 + x as f32, fy0 + y as f32, fx0 + x as f32 + 1.0, fy0 + y as f32 + 1.0, DARK);
+                        fill(&painter, fx0 + x as f32, fy0 + y as f32, fx0 + x as f32 + 1.0, fy0 + y as f32 + 1.0, pal().dark);
                     }
                 }
             }
@@ -1470,22 +1503,22 @@ impl App {
                 if wd.wtype.is_visual() {
                     for (_, (px, py)) in handle_points(wd) {
                         let (cx, cy) = ((org.x + px as f32).round(), (org.y + py as f32).round());
-                        fill(&painter, cx - 2.0, cy - 2.0, cx + 2.0, cy + 2.0, BLACK);
+                        fill(&painter, cx - 2.0, cy - 2.0, cx + 2.0, cy + 2.0, pal().black);
                     }
                 } else {
                     let r = Rect::from_min_size(org + vec2(wd.x as f32, wd.y as f32), vec2(wd.w as f32, wd.h as f32)).expand(2.0);
-                    painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, BLACK), egui::StrokeKind::Outside);
+                    painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, pal().black), egui::StrokeKind::Outside);
                 }
             } else {
                 // Formular selbst: Griffe rechts/unten zum Vergroessern
                 for (px, py) in [(w, h / 2.0), (w / 2.0, h), (w, h)] {
                     let (cx, cy) = ((org.x + px).round() + 1.0, (org.y + py).round() + 1.0);
-                    fill(&painter, cx - 2.0, cy - 2.0, cx + 2.0, cy + 2.0, BLACK);
+                    fill(&painter, cx - 2.0, cy - 2.0, cx + 2.0, cy + 2.0, pal().black);
                 }
             }
             if let Some((x1, y1, x2, y2)) = self.st.rubber_band() {
                 let r = Rect::from_two_pos(org + vec2(x1 as f32, y1 as f32), org + vec2(x2 as f32, y2 as f32));
-                painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, BLACK), egui::StrokeKind::Middle);
+                painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, pal().black), egui::StrokeKind::Middle);
             }
         });
     }
@@ -1573,7 +1606,7 @@ impl App {
         }
 
         let mut layouter = |ui: &Ui, buf: &dyn egui::TextBuffer, wrap: f32| {
-            let mut job = pyhl::highlight(buf.as_str(), &mono);
+            let mut job = pyhl::highlight(buf.as_str(), &mono, theme::is_dark());
             job.wrap.max_width = wrap;
             ui.fonts_mut(|f| f.layout_job(job))
         };
@@ -1608,7 +1641,7 @@ impl App {
                 egui::Shape::rect_filled(
                     Rect::from_min_size(gutter.min, vec2(gutter_w, full_h)),
                     CornerRadius::ZERO,
-                    Color32::from_rgb(0xec, 0xe9, 0xe0),
+                    pal().gutter,
                 ),
             );
             let mut line_no = 0usize;
@@ -1623,7 +1656,7 @@ impl App {
                         Align2::RIGHT_TOP,
                         line_no.to_string(),
                         FontId::monospace(12.0),
-                        if cur { Color32::from_rgb(0x20, 0x20, 0x20) } else { Color32::from_rgb(0x90, 0x90, 0x90) },
+                        if cur { pal().gutter_cur } else { pal().gutter_dim },
                     );
                 }
                 new_line = prow.ends_with_newline;
@@ -1634,13 +1667,13 @@ impl App {
                     );
                     ui.painter().set(
                         hl_idx,
-                        egui::Shape::rect_filled(r, CornerRadius::ZERO, Color32::from_rgba_unmultiplied(0xff, 0xe9, 0x6a, 0x30)),
+                        egui::Shape::rect_filled(r, CornerRadius::ZERO, pal().curline),
                     );
                 }
             }
             ui.painter().line_segment(
                 [pos2(gutter.max.x, gutter.min.y), pos2(gutter.max.x, gutter.min.y + full_h)],
-                Stroke::new(1.0, Color32::from_rgb(0xb0, 0xad, 0xa4)),
+                Stroke::new(1.0, pal().gutter_line),
             );
             if let Some(range) = out.cursor_range {
                 let (l, c) = line_col(&self.st.logic, range.primary.index.0);
@@ -1705,6 +1738,15 @@ impl App {
             Modal::Info(t) => (false, false, t.clone()),
             Modal::Items { .. } => (false, false, String::new()),
             Modal::SaveChanges(_) => (true, false, "Änderungen speichern?".into()),
+            Modal::ExternalChange => (
+                false,
+                true,
+                "Die Logik-Datei wurde außerhalb von Pyphi7 geändert (z. B. in VS Code), aber im \
+                 Editor stehen auch ungespeicherte Änderungen.\n\n\
+                 Ja = Datei von der Platte übernehmen (Editor-Änderungen verwerfen)\n\
+                 Nein = Editor behalten (die Datei wird beim Speichern überschrieben)"
+                    .into(),
+            ),
             Modal::LogicConflict(_) => (
                 false,
                 true,
@@ -1758,6 +1800,8 @@ impl App {
             }
             (Modal::LogicConflict(what), Choice::Yes) => self.persist(ctx, what, false, LogicPolicy::Overwrite),
             (Modal::LogicConflict(what), Choice::No) => self.persist(ctx, what, false, LogicPolicy::LoadExisting),
+            (Modal::ExternalChange, Choice::Yes) => self.st.take_external(),
+            (Modal::ExternalChange, _) => self.st.keep_editor(),
             _ => {}
         }
     }
@@ -1808,6 +1852,7 @@ fn dotted_rect(p: &Painter, x1: f32, y1: f32, x2: f32, y2: f32, c: Color32) {
 }
 
 fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) {
+    let _light = theme::Light::on();
     let x1 = (org.x + wd.x as f32).round();
     let y1 = (org.y + wd.y as f32).round();
     let (w, h) = (wd.w as f32, wd.h as f32);
@@ -1818,13 +1863,13 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
     let size = if wd.wtype.has_font() { wd.prop_int("font_size") } else { 0 };
     let font = if size > 0 { FontId::proportional(size as f32 * 1.333) } else { base.clone() };
     let bold = wd.wtype.has_font() && wd.prop_bool("font_bold");
-    let col = if wd.wtype.has_font() { parse_hex(&wd.prop("font_color")).unwrap_or(BLACK) } else { BLACK };
-    let fg = if wd.enabled { col } else { GRAY };
-    let lh = p.layout_no_wrap("Ag".into(), font.clone(), BLACK).size().y;
+    let col = if wd.wtype.has_font() { parse_hex(&wd.prop("font_color")).unwrap_or(pal().black) } else { pal().black };
+    let fg = if wd.enabled { col } else { pal().gray };
+    let lh = p.layout_no_wrap("Ag".into(), font.clone(), pal().black).size().y;
     let font = &font;
     match wd.wtype {
         WType::Button => {
-            bevel(p, x1, y1, x2, y2, false, FACE);
+            bevel(p, x1, y1, x2, y2, false, pal().face);
             let t = fit(p, wd.text.lines().next().unwrap_or(""), font, w - 8.0);
             put(p, pos2(cx, cy), Align2::CENTER_CENTER, &t, font, fg, bold);
         }
@@ -1842,7 +1887,7 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
             }
         }
         WType::Entry => {
-            bevel(p, x1, y1, x2, y2, true, WHITE);
+            bevel(p, x1, y1, x2, y2, true, pal().white);
             let shown = match wd.prop("password").chars().next() {
                 Some(ch) => ch.to_string().repeat(wd.text.chars().count()),
                 None => wd.text.clone(),
@@ -1850,35 +1895,35 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
             put(p, pos2(x1 + 4.0, cy), Align2::LEFT_CENTER, &fit(p, &shown, font, w - 8.0), font, fg, bold);
         }
         WType::Checkbox => {
-            bevel(p, x1, cy - 6.0, x1 + 12.0, cy + 6.0, true, WHITE);
+            bevel(p, x1, cy - 6.0, x1 + 12.0, cy + 6.0, true, pal().white);
             if wd.prop_bool("checked") {
                 let (a, m, e) = (pos2(x1 + 3.0, cy), pos2(x1 + 5.0, cy + 3.0), pos2(x1 + 9.5, cy - 3.0));
-                p.line_segment([a, m], Stroke::new(2.0, BLACK));
-                p.line_segment([m, e], Stroke::new(2.0, BLACK));
+                p.line_segment([a, m], Stroke::new(2.0, pal().black));
+                p.line_segment([m, e], Stroke::new(2.0, pal().black));
             }
             put(p, pos2(x1 + 19.0, cy), Align2::LEFT_CENTER, &fit(p, &wd.text, font, w - 20.0), font, fg, bold);
         }
         WType::Radiobutton => {
             let c = pos2(x1 + 6.5, cy);
-            p.circle_filled(c, 6.5, WHITE);
-            p.circle_stroke(c, 6.5, Stroke::new(1.0, GRAY));
-            p.circle_stroke(c, 5.5, Stroke::new(1.0, DARK));
+            p.circle_filled(c, 6.5, pal().white);
+            p.circle_stroke(c, 6.5, Stroke::new(1.0, pal().gray));
+            p.circle_stroke(c, 5.5, Stroke::new(1.0, pal().dark));
             if wd.prop_bool("checked") {
-                p.circle_filled(c, 2.5, BLACK);
+                p.circle_filled(c, 2.5, pal().black);
             }
             put(p, pos2(x1 + 19.0, cy), Align2::LEFT_CENTER, &fit(p, &wd.text, font, w - 20.0), font, fg, bold);
         }
         WType::Listbox | WType::Text | WType::Combobox => {
-            bevel(p, x1, y1, x2, y2, true, WHITE);
+            bevel(p, x1, y1, x2, y2, true, pal().white);
             let lines: Vec<String> = if wd.wtype == WType::Text {
                 wd.text.split('\n').map(|s| s.to_string()).collect()
             } else {
                 model::items_of(wd)
             };
             if wd.wtype == WType::Combobox {
-                bevel(p, x2 - 17.0, y1 + 2.0, x2 - 2.0, y2 - 2.0, false, FACE);
+                bevel(p, x2 - 17.0, y1 + 2.0, x2 - 2.0, y2 - 2.0, false, pal().face);
                 let a = pos2(x2 - 10.0, cy);
-                p.add(egui::Shape::convex_polygon(vec![a + vec2(-3.5, -1.5), a + vec2(3.5, -1.5), a + vec2(0.0, 2.5)], BLACK, Stroke::NONE));
+                p.add(egui::Shape::convex_polygon(vec![a + vec2(-3.5, -1.5), a + vec2(3.5, -1.5), a + vec2(0.0, 2.5)], pal().black, Stroke::NONE));
                 let idx = wd.prop_int("index");
                 if let Some(first) = lines.get(idx.max(0) as usize).filter(|_| idx >= 0) {
                     put(p, pos2(x1 + 4.0, cy), Align2::LEFT_CENTER, &fit(p, first, font, w - 28.0), font, fg, bold);
@@ -1890,8 +1935,8 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
                     let yy = y1 + 3.0 + i as f32 * lh;
                     let mut c = fg;
                     if i as i32 == sel {
-                        fill(p, x1 + 2.0, yy, x2 - 2.0, yy + lh - 1.0, NAVY);
-                        c = WHITE;
+                        fill(p, x1 + 2.0, yy, x2 - 2.0, yy + lh - 1.0, pal().navy);
+                        c = pal().white;
                     }
                     put(p, pos2(x1 + 4.0, yy), Align2::LEFT_TOP, &fit(p, line, font, w - 8.0), font, c, bold);
                 }
@@ -1900,17 +1945,17 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
         WType::Groupbox => {
             let top = y1 + (lh / 2.0).round();
             let r = Rect::from_min_max(pos2(x1, top), pos2(x2, y2));
-            p.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, GRAY), egui::StrokeKind::Inside);
-            p.rect_stroke(r.translate(vec2(1.0, 1.0)), CornerRadius::ZERO, Stroke::new(1.0, WHITE), egui::StrokeKind::Inside);
+            p.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, pal().gray), egui::StrokeKind::Inside);
+            p.rect_stroke(r.translate(vec2(1.0, 1.0)), CornerRadius::ZERO, Stroke::new(1.0, pal().white), egui::StrokeKind::Inside);
             let t = fit(p, &wd.text, font, w - 20.0);
             if !t.is_empty() {
-                let tw = p.layout_no_wrap(t.clone(), font.clone(), BLACK).size().x;
-                fill(p, x1 + 7.0, y1, x1 + 13.0 + tw, y1 + lh, FACE);
+                let tw = p.layout_no_wrap(t.clone(), font.clone(), pal().black).size().x;
+                fill(p, x1 + 7.0, y1, x1 + 13.0 + tw, y1 + lh, pal().face);
                 put(p, pos2(x1 + 10.0, y1), Align2::LEFT_TOP, &t, font, fg, bold);
             }
         }
         WType::Panel => {
-            let c = parse_hex(&wd.prop("color")).unwrap_or(FACE);
+            let c = parse_hex(&wd.prop("color")).unwrap_or(pal().face);
             match wd.prop("bevel").as_str() {
                 "bvNone" => fill(p, x1, y1, x2, y2, c),
                 "bvLowered" => bevel(p, x1, y1, x2, y2, true, c),
@@ -1919,13 +1964,13 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
             put(p, pos2(cx, cy), Align2::CENTER_CENTER, &fit(p, &wd.text, font, w - 8.0), font, fg, bold);
         }
         WType::Progressbar => {
-            bevel(p, x1, y1, x2, y2, true, FACE);
+            bevel(p, x1, y1, x2, y2, true, pal().face);
             let (mn, mx) = (wd.prop_int("min"), wd.prop_int("max").max(wd.prop_int("min") + 1));
             let frac = ((wd.prop_int("pos").clamp(mn, mx) - mn) as f32 / (mx - mn) as f32).clamp(0.0, 1.0);
             let inner = (w - 6.0) * frac;
             let mut x = x1 + 3.0;
             while x + 6.0 <= x1 + 3.0 + inner {
-                fill(p, x, y1 + 3.0, x + 5.0, y2 - 3.0, NAVY);
+                fill(p, x, y1 + 3.0, x + 5.0, y2 - 3.0, pal().navy);
                 x += 8.0;
             }
         }
@@ -1933,51 +1978,51 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
             let (mn, mx) = (wd.prop_int("min"), wd.prop_int("max").max(wd.prop_int("min") + 1));
             let frac = ((wd.prop_int("pos").clamp(mn, mx) - mn) as f32 / (mx - mn) as f32).clamp(0.0, 1.0);
             if wd.prop("orient") == "trVertical" {
-                bevel(p, cx - 2.0, y1 + 6.0, cx + 2.0, y2 - 6.0, true, FACE);
+                bevel(p, cx - 2.0, y1 + 6.0, cx + 2.0, y2 - 6.0, true, pal().face);
                 let ty = (y1 + 6.0 + (h - 22.0) * frac).round();
-                bevel(p, cx - 10.0, ty, cx + 10.0, ty + 10.0, false, FACE);
+                bevel(p, cx - 10.0, ty, cx + 10.0, ty + 10.0, false, pal().face);
             } else {
-                bevel(p, x1 + 6.0, cy - 2.0, x2 - 6.0, cy + 2.0, true, FACE);
+                bevel(p, x1 + 6.0, cy - 2.0, x2 - 6.0, cy + 2.0, true, pal().face);
                 let tx = (x1 + 6.0 + (w - 22.0) * frac).round();
-                bevel(p, tx, cy - 10.0, tx + 10.0, cy + 10.0, false, FACE);
+                bevel(p, tx, cy - 10.0, tx + 10.0, cy + 10.0, false, pal().face);
                 let n = (mx - mn).min(20);
                 for i in 0..=n {
                     let tx = x1 + 11.0 + (w - 22.0) * i as f32 / n as f32;
-                    vline(p, tx.round(), cy + 12.0, cy + 15.0, BLACK);
+                    vline(p, tx.round(), cy + 12.0, cy + 15.0, pal().black);
                 }
             }
         }
         WType::Spinedit => {
-            bevel(p, x1, y1, x2, y2, true, WHITE);
+            bevel(p, x1, y1, x2, y2, true, pal().white);
             let (mn, mx) = (wd.prop_int("min"), wd.prop_int("max").max(wd.prop_int("min")));
             let v = wd.prop_int("pos").clamp(mn, mx).to_string();
             put(p, pos2(x1 + 4.0, cy), Align2::LEFT_CENTER, &v, font, fg, bold);
             let bx = x2 - 15.0;
-            bevel(p, bx, y1 + 2.0, x2 - 2.0, cy, false, FACE);
-            bevel(p, bx, cy, x2 - 2.0, y2 - 2.0, false, FACE);
+            bevel(p, bx, y1 + 2.0, x2 - 2.0, cy, false, pal().face);
+            bevel(p, bx, cy, x2 - 2.0, y2 - 2.0, false, pal().face);
             let a = pos2(bx + 7.0, (y1 + 2.0 + cy) / 2.0);
-            p.add(egui::Shape::convex_polygon(vec![a + vec2(-3.0, 1.5), a + vec2(3.0, 1.5), a + vec2(0.0, -1.5)], BLACK, Stroke::NONE));
+            p.add(egui::Shape::convex_polygon(vec![a + vec2(-3.0, 1.5), a + vec2(3.0, 1.5), a + vec2(0.0, -1.5)], pal().black, Stroke::NONE));
             let b = pos2(bx + 7.0, (cy + y2 - 2.0) / 2.0);
-            p.add(egui::Shape::convex_polygon(vec![b + vec2(-3.0, -1.5), b + vec2(3.0, -1.5), b + vec2(0.0, 1.5)], BLACK, Stroke::NONE));
+            p.add(egui::Shape::convex_polygon(vec![b + vec2(-3.0, -1.5), b + vec2(3.0, -1.5), b + vec2(0.0, 1.5)], pal().black, Stroke::NONE));
         }
         WType::Image => {
-            dotted_rect(p, x1, y1, x2, y2, DARK);
+            dotted_rect(p, x1, y1, x2, y2, pal().dark);
             let pic = wd.prop("picture");
             let label = if pic.is_empty() { "(kein Bild)".to_string() } else { pic };
             p.line_segment([pos2(x1 + 3.0, y1 + 3.0), pos2(x2 - 3.0, y2 - 3.0)], Stroke::new(1.0, Color32::from_rgb(0xa0, 0xa0, 0xa0)));
             p.line_segment([pos2(x2 - 3.0, y1 + 3.0), pos2(x1 + 3.0, y2 - 3.0)], Stroke::new(1.0, Color32::from_rgb(0xa0, 0xa0, 0xa0)));
             let t = fit(p, &label, base, w - 8.0);
-            let tw = p.layout_no_wrap(t.clone(), base.clone(), BLACK).size();
-            fill(p, cx - tw.x / 2.0 - 2.0, cy - tw.y / 2.0, cx + tw.x / 2.0 + 2.0, cy + tw.y / 2.0, FACE);
-            p.text(pos2(cx, cy), Align2::CENTER_CENTER, t, base.clone(), BLACK);
+            let tw = p.layout_no_wrap(t.clone(), base.clone(), pal().black).size();
+            fill(p, cx - tw.x / 2.0 - 2.0, cy - tw.y / 2.0, cx + tw.x / 2.0 + 2.0, cy + tw.y / 2.0, pal().face);
+            p.text(pos2(cx, cy), Align2::CENTER_CENTER, t, base.clone(), pal().black);
         }
         WType::Database => {
-            bevel(p, x1, y1, x2, y2, false, FACE);
+            bevel(p, x1, y1, x2, y2, false, pal().face);
             let (ex, ey) = (7.0, 3.0);
             let c = pos2(cx + 0.5, cy + 0.5);
             fill(p, c.x - ex, c.y - 5.0, c.x + ex, c.y + 5.0, Color32::from_rgb(0xc8, 0xd8, 0xf0));
-            vline(p, c.x - ex, c.y - 5.0, c.y + 5.0, DARK);
-            vline(p, c.x + ex, c.y - 5.0, c.y + 5.0, DARK);
+            vline(p, c.x - ex, c.y - 5.0, c.y + 5.0, pal().dark);
+            vline(p, c.x + ex, c.y - 5.0, c.y + 5.0, pal().dark);
             for dy in [-5.0f32, 0.0, 5.0] {
                 let top = pos2(c.x, c.y + dy);
                 let pts: Vec<_> = (0..=12)
@@ -1986,7 +2031,7 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
                         top + vec2(-ex * a.cos(), if dy < 0.0 { -ey * a.sin() } else { ey * a.sin() })
                     })
                     .collect();
-                p.add(egui::Shape::line(pts, Stroke::new(1.0, DARK)));
+                p.add(egui::Shape::line(pts, Stroke::new(1.0, pal().dark)));
             }
             let top: Vec<_> = (0..16)
                 .map(|i| {
@@ -1994,17 +2039,17 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
                     pos2(c.x + ex * a.cos(), c.y - 5.0 + ey * a.sin())
                 })
                 .collect();
-            p.add(egui::Shape::closed_line(top, Stroke::new(1.0, DARK)));
+            p.add(egui::Shape::closed_line(top, Stroke::new(1.0, pal().dark)));
         }
         WType::Datagrid => {
-            bevel(p, x1, y1, x2, y2, true, WHITE);
+            bevel(p, x1, y1, x2, y2, true, pal().white);
             let cols = {
                 let c = model::items_of(wd);
                 if c.is_empty() { vec!["Spalte1".to_string(), "Spalte2".to_string()] } else { c }
             };
             let hh = lh + 3.0;
-            fill(p, x1 + 2.0, y1 + 2.0, x2 - 2.0, y1 + 2.0 + hh, FACE);
-            hline(p, x1 + 2.0, x2 - 2.0, y1 + 2.0 + hh, GRAY);
+            fill(p, x1 + 2.0, y1 + 2.0, x2 - 2.0, y1 + 2.0 + hh, pal().face);
+            hline(p, x1 + 2.0, x2 - 2.0, y1 + 2.0 + hh, pal().gray);
             let cw = ((w - 4.0) / cols.len() as f32).max(20.0);
             for (i, name) in cols.iter().enumerate() {
                 let cx0 = x1 + 2.0 + i as f32 * cw;
@@ -2012,23 +2057,23 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
                     break;
                 }
                 if i > 0 {
-                    vline(p, cx0, y1 + 2.0, y1 + 2.0 + hh, GRAY);
+                    vline(p, cx0, y1 + 2.0, y1 + 2.0 + hh, pal().gray);
                 }
-                put(p, pos2(cx0 + 4.0, y1 + 2.0 + hh / 2.0), Align2::LEFT_CENTER, &fit(p, name, font, (cw - 8.0).min(x2 - cx0 - 6.0)), font, BLACK, true);
+                put(p, pos2(cx0 + 4.0, y1 + 2.0 + hh / 2.0), Align2::LEFT_CENTER, &fit(p, name, font, (cw - 8.0).min(x2 - cx0 - 6.0)), font, pal().black, true);
             }
             let mut yy = y1 + 3.0 + hh + lh;
             while yy < y2 - 2.0 {
-                hline(p, x1 + 2.0, x2 - 2.0, yy, Color32::from_rgb(0xe0, 0xe0, 0xe0));
+                hline(p, x1 + 2.0, x2 - 2.0, yy, pal().line1);
                 yy += lh + 2.0;
             }
         }
         WType::Timer => {
-            bevel(p, x1, y1, x2, y2, false, FACE);
+            bevel(p, x1, y1, x2, y2, false, pal().face);
             let c = pos2(cx + 0.5, cy + 0.5);
-            p.circle_filled(c, 8.0, WHITE);
-            p.circle_stroke(c, 8.0, Stroke::new(1.0, BLACK));
-            p.line_segment([c, c + vec2(0.0, -6.0)], Stroke::new(1.0, BLACK));
-            p.line_segment([c, c + vec2(4.0, 1.5)], Stroke::new(1.0, BLACK));
+            p.circle_filled(c, 8.0, pal().white);
+            p.circle_stroke(c, 8.0, Stroke::new(1.0, pal().black));
+            p.line_segment([c, c + vec2(0.0, -6.0)], Stroke::new(1.0, pal().black));
+            p.line_segment([c, c + vec2(4.0, 1.5)], Stroke::new(1.0, pal().black));
         }
     }
 }
@@ -2054,33 +2099,38 @@ fn setup_style(ctx: &egui::Context) {
         }
     }
     ctx.set_fonts(fonts);
+    apply_visuals(ctx);
+}
 
-    let mut v = egui::Visuals::light();
-    v.panel_fill = FACE;
-    v.window_fill = FACE;
-    v.extreme_bg_color = WHITE;
-    v.faint_bg_color = FACE;
-    v.override_text_color = Some(BLACK);
+/// Farben der Oberflaeche (nach Umschalten hell/dunkel erneut aufrufen).
+fn apply_visuals(ctx: &egui::Context) {
+    let k = pal();
+    let mut v = if theme::is_dark() { egui::Visuals::dark() } else { egui::Visuals::light() };
+    v.panel_fill = k.face;
+    v.window_fill = k.face;
+    v.extreme_bg_color = k.white;
+    v.faint_bg_color = k.face;
+    v.override_text_color = Some(k.black);
     v.window_corner_radius = CornerRadius::ZERO;
     v.menu_corner_radius = CornerRadius::ZERO;
     v.window_shadow = egui::Shadow::NONE;
     v.popup_shadow = egui::Shadow::NONE;
-    v.window_stroke = Stroke::new(1.0, BLACK);
+    v.window_stroke = Stroke::new(1.0, k.black);
     for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
         w.corner_radius = CornerRadius::ZERO;
     }
-    v.widgets.noninteractive.bg_fill = FACE;
-    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, GRAY);
-    v.widgets.inactive.weak_bg_fill = FACE;
-    v.widgets.inactive.bg_fill = FACE;
-    v.widgets.inactive.bg_stroke = Stroke::new(1.0, GRAY);
-    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(0xe4, 0xe0, 0xd8);
-    v.widgets.hovered.bg_fill = Color32::from_rgb(0xe4, 0xe0, 0xd8);
-    v.widgets.hovered.bg_stroke = Stroke::new(1.0, DARK);
-    v.widgets.active.weak_bg_fill = Color32::from_rgb(0xc4, 0xc0, 0xb8);
-    v.widgets.active.bg_fill = Color32::from_rgb(0xc4, 0xc0, 0xb8);
-    v.selection.bg_fill = Color32::from_rgb(0xa8, 0xc0, 0xe8);
-    v.selection.stroke = Stroke::new(1.0, BLACK);
+    v.widgets.noninteractive.bg_fill = k.face;
+    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, k.gray);
+    v.widgets.inactive.weak_bg_fill = k.face;
+    v.widgets.inactive.bg_fill = k.face;
+    v.widgets.inactive.bg_stroke = Stroke::new(1.0, k.gray);
+    v.widgets.hovered.weak_bg_fill = k.hover;
+    v.widgets.hovered.bg_fill = k.hover;
+    v.widgets.hovered.bg_stroke = Stroke::new(1.0, k.dark);
+    v.widgets.active.weak_bg_fill = k.active;
+    v.widgets.active.bg_fill = k.active;
+    v.selection.bg_fill = k.select;
+    v.selection.stroke = Stroke::new(1.0, k.black);
     ctx.set_visuals(v);
 }
 
@@ -2114,6 +2164,17 @@ impl eframe::App for App {
         }
         if got || !self.procs.is_empty() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+
+        // Live-Abgleich: Aenderungen an der Logik-Datei von aussen (z. B. VS Code) sofort uebernehmen
+        if self.st.path.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(300));
+            if self.modal.is_none() && self.last_poll.elapsed() >= std::time::Duration::from_millis(250) {
+                self.last_poll = std::time::Instant::now();
+                if self.st.check_external() == crate::state::ExtSync::Conflict {
+                    self.modal = Some(Modal::ExternalChange);
+                }
+            }
         }
 
         // Klick ausserhalb des Inspektors beendet eine laufende Eingabe
@@ -2196,11 +2257,11 @@ impl eframe::App for App {
         // ---- Layout
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::top("toolbar")
-            .frame(egui::Frame::NONE.fill(FACE).inner_margin(egui::Margin::same(4)))
+            .frame(egui::Frame::NONE.fill(pal().face).inner_margin(egui::Margin::same(4)))
             .show(ui, |ui| self.toolbar(ui));
 
         egui::Panel::bottom("status")
-            .frame(egui::Frame::NONE.fill(FACE).inner_margin(egui::Margin::symmetric(2, 2)))
+            .frame(egui::Frame::NONE.fill(pal().face).inner_margin(egui::Margin::symmetric(2, 2)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(2.0, 0.0);
@@ -2208,8 +2269,8 @@ impl eframe::App for App {
                     let modified = if self.st.is_dirty() { "Geändert" } else { "" };
                     for (text, w) in [(pos.as_str(), 70.0), (modified, 80.0), ("Einfügen", 72.0)] {
                         let (r, _) = ui.allocate_exact_size(vec2(w, 20.0), Sense::hover());
-                        bevel(ui.painter(), r.min.x, r.min.y, r.max.x - 1.0, r.max.y - 1.0, true, FACE);
-                        ui.painter().text(r.center(), Align2::CENTER_CENTER, text, FontId::proportional(13.0), BLACK);
+                        bevel(ui.painter(), r.min.x, r.min.y, r.max.x - 1.0, r.max.y - 1.0, true, pal().face);
+                        ui.painter().text(r.center(), Align2::CENTER_CENTER, text, FontId::proportional(13.0), pal().black);
                     }
                     ui.add_space(8.0);
                     ui.label(&self.hint);
@@ -2220,16 +2281,16 @@ impl eframe::App for App {
             .resizable(true)
             .default_size(110.0)
             .min_size(50.0)
-            .frame(egui::Frame::NONE.fill(FACE).inner_margin(egui::Margin::same(4)))
+            .frame(egui::Frame::NONE.fill(pal().face).inner_margin(egui::Margin::same(4)))
             .show(ui, |ui| {
                 ui.label(egui::RichText::new("Meldungen").strong());
                 egui::ScrollArea::vertical().auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 1.0;
                     for (line, kind) in &self.st.log {
                         let col = match kind {
-                            LogKind::Normal => BLACK,
-                            LogKind::Info => Color32::from_rgb(0x00, 0x00, 0x80),
-                            LogKind::Err => Color32::from_rgb(0xb0, 0x00, 0x00),
+                            LogKind::Normal => pal().black,
+                            LogKind::Info => pal().info,
+                            LogKind::Err => pal().err,
                         };
                         ui.label(egui::RichText::new(line).monospace().color(col));
                     }
@@ -2240,12 +2301,12 @@ impl eframe::App for App {
             .resizable(true)
             .default_size(290.0)
             .min_size(220.0)
-            .frame(egui::Frame::NONE.fill(FACE).inner_margin(egui::Margin::same(3)))
+            .frame(egui::Frame::NONE.fill(pal().face).inner_margin(egui::Margin::same(3)))
             .show(ui, |ui| self.inspector(ui));
         self.insp_rect = ir.response.rect;
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE.fill(FACE).inner_margin(egui::Margin::same(2)))
+            .frame(egui::Frame::NONE.fill(pal().face).inner_margin(egui::Margin::same(2)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;

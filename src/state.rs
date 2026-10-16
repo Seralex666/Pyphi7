@@ -109,6 +109,16 @@ pub enum SaveResult {
     Conflict,
 }
 
+/// Ergebnis der Pruefung, ob die Logik-Datei von aussen (z. B. VS Code) geaendert wurde.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExtSync {
+    Nothing,
+    /// Neuer Text wurde in den Editor uebernommen.
+    Reloaded,
+    /// Datei und Editor sind beide geaendert: der Nutzer muss entscheiden.
+    Conflict,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum GenResult {
     Done(Vec<String>),
@@ -130,6 +140,8 @@ pub struct State {
     pub logic: String,
     pub logic_dirty: bool,
     pub logic_mtime: Option<SystemTime>,
+    /// Geaenderter Zeitstempel, der beim letzten Blick schon da war (Entprellen: Editoren schreiben nicht atomar).
+    ext_seen: Option<SystemTime>,
     pub toolkit_choice: usize, // 0 = Tkinter, 1 = Qt, 2 = Beide
     pub log: Vec<(String, LogKind)>,
     /// Wunsch an die UI: Cursor im Editor auf dieses Zeichen setzen und hinscrollen.
@@ -157,6 +169,7 @@ impl State {
             logic: codegen::header(None),
             logic_dirty: false,
             logic_mtime: None,
+            ext_seen: None,
             toolkit_choice: 0,
             log: Vec::new(),
             goto_char: None,
@@ -799,6 +812,55 @@ impl State {
         self.logic_dirty = false;
     }
 
+    /// Beobachtet die Logik-Datei. Aendert ein anderes Programm (VS Code ...) sie, wird der neue Text
+    /// uebernommen - sofern im Editor nichts Ungespeichertes steht. Ruft man regelmaessig auf; eine
+    /// Aenderung wird erst beim zweiten Aufruf uebernommen, wenn sie "stillsteht".
+    pub fn check_external(&mut self) -> ExtSync {
+        let (Some(lp), Some(known)) = (self.logic_file(), self.logic_mtime) else {
+            return ExtSync::Nothing;
+        };
+        let Some(now) = mtime(&lp) else {
+            return ExtSync::Nothing;
+        };
+        if now == known {
+            self.ext_seen = None;
+            return ExtSync::Nothing;
+        }
+        if self.ext_seen != Some(now) {
+            self.ext_seen = Some(now);
+            return ExtSync::Nothing;
+        }
+        let Ok(text) = std::fs::read_to_string(&lp) else {
+            return ExtSync::Nothing;
+        };
+        let text = text.replace("\r\n", "\n");
+        self.ext_seen = None;
+        if text.trim_end_matches('\n') == self.logic.trim_end_matches('\n') {
+            self.logic_mtime = Some(now);
+            return ExtSync::Nothing;
+        }
+        if self.logic_dirty {
+            return ExtSync::Conflict;
+        }
+        self.logic = text;
+        self.logic_mtime = Some(now);
+        let name = lp.file_name().and_then(|n| n.to_str()).unwrap_or("Logik").to_string();
+        self.log(format!("{} wurde von außen geändert und übernommen.", name), LogKind::Info);
+        ExtSync::Reloaded
+    }
+
+    /// Nach einem Konflikt: die Datei auf der Platte gewinnt.
+    pub fn take_external(&mut self) {
+        self.load_logic();
+    }
+
+    /// Nach einem Konflikt: der Editor gewinnt (die Datei wird beim naechsten Speichern ueberschrieben).
+    pub fn keep_editor(&mut self) {
+        if let Some(lp) = self.logic_file() {
+            self.logic_mtime = mtime(&lp);
+        }
+    }
+
     pub fn new_project(&mut self) {
         let (snap, grid, tk) = (self.snap, self.show_grid, self.toolkit_choice);
         let log = std::mem::take(&mut self.log);
@@ -1058,6 +1120,53 @@ mod tests {
         t.open(&d.join("Mein Projekt.pyphi")).unwrap();
         assert_eq!(t.proj, s.proj);
         assert!(t.logic.starts_with("# MEINE EIGENEN"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn external_edit_is_picked_up_live() {
+        let d = tmpdir("extsync");
+        let mut s = State::new();
+        s.set_path(d.join("Live.pyphi"));
+        assert!(matches!(s.save(LogicPolicy::Ask), Ok(SaveResult::Saved)));
+        let lp = d.join("Live_logic.py");
+        assert_eq!(s.check_external(), ExtSync::Nothing);
+        // VS Code speichert: neue Datei, anderer Zeitstempel
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(&lp, "# aus VS Code\r\ndef Button1Click(ui):\r\n    pass\r\n").unwrap();
+        // erst beim zweiten Blick (entprellt) wird uebernommen
+        assert_eq!(s.check_external(), ExtSync::Nothing);
+        assert_eq!(s.check_external(), ExtSync::Reloaded);
+        assert!(s.logic.starts_with("# aus VS Code\ndef Button1Click"));
+        assert!(!s.logic_dirty && !s.is_dirty());
+        assert_eq!(s.check_external(), ExtSync::Nothing);
+        // eigener Speichervorgang loest nichts aus
+        s.logic.push_str("\n# lokal\n");
+        s.logic_dirty = true;
+        assert!(matches!(s.save(LogicPolicy::Ask), Ok(SaveResult::Saved)));
+        assert_eq!(s.check_external(), ExtSync::Nothing);
+        assert_eq!(s.check_external(), ExtSync::Nothing);
+        // beide Seiten geaendert -> Konflikt, nichts geht verloren
+        s.logic.push_str("# im Editor, noch nicht gespeichert\n");
+        s.logic_dirty = true;
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(&lp, "# schon wieder VS Code\n").unwrap();
+        assert_eq!(s.check_external(), ExtSync::Nothing);
+        assert_eq!(s.check_external(), ExtSync::Conflict);
+        assert!(s.logic.contains("im Editor"));
+        s.take_external();
+        assert_eq!(s.logic, "# schon wieder VS Code\n");
+        assert!(!s.logic_dirty);
+        // "Editor behalten": Datei wird nicht erneut gemeldet
+        s.logic = "# meins\n".into();
+        s.logic_dirty = true;
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(&lp, "# fremd\n").unwrap();
+        let _ = s.check_external();
+        assert_eq!(s.check_external(), ExtSync::Conflict);
+        s.keep_editor();
+        assert_eq!(s.check_external(), ExtSync::Nothing);
+        assert_eq!(s.logic, "# meins\n");
         let _ = std::fs::remove_dir_all(&d);
     }
 

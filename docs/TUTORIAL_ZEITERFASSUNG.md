@@ -111,6 +111,8 @@ und schreibe Folgendes hinein. Du kannst es auch kopieren.
 
 ![Code-Editor](img/zeit_05_code.png)
 
+> **Tipp:** Du kannst `zeiterfassung_logic.py` auch in VS Code oder einem anderen Editor öffnen und dort schreiben. Sobald du dort speicherst, übernimmt Pyphi7 den Text sofort. Das dunkle Design schaltest du unter **Ansicht > Dunkles Design** ein.
+
 ```python
 from datetime import datetime
 

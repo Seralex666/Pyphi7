@@ -33,22 +33,42 @@ const BUILTINS: &[&str] = &[
     "ZeroDivisionError", "AttributeError", "StopIteration", "NotImplementedError", "ImportError",
 ];
 
-fn style(kind: Kind, font: &FontId) -> TextFormat {
-    let (color, italics) = match kind {
-        Kind::Normal => (Color32::from_rgb(0x10, 0x10, 0x10), false),
-        Kind::Keyword => (Color32::from_rgb(0x00, 0x00, 0xc0), false),
-        Kind::Builtin => (Color32::from_rgb(0x7a, 0x3e, 0x9d), false),
-        Kind::DefName => (Color32::from_rgb(0x00, 0x62, 0x7a), false),
-        Kind::Call => (Color32::from_rgb(0x79, 0x5e, 0x26), false),
-        Kind::Decorator => (Color32::from_rgb(0x9e, 0x88, 0x0d), false),
-        Kind::SelfKw => (Color32::from_rgb(0x94, 0x55, 0x8d), true),
-        Kind::Ui => (Color32::from_rgb(0xb0, 0x00, 0x6a), false),
-        Kind::Number => (Color32::from_rgb(0x09, 0x86, 0x58), false),
-        Kind::Str => (Color32::from_rgb(0xa3, 0x15, 0x15), false),
-        Kind::FExpr => (Color32::from_rgb(0x1a, 0x5a, 0xa0), false),
-        Kind::Doc => (Color32::from_rgb(0x4d, 0x6b, 0x4d), true),
-        Kind::Comment => (Color32::from_rgb(0x00, 0x80, 0x00), true),
-        Kind::Op => (Color32::from_rgb(0x40, 0x40, 0x40), false),
+fn style(kind: Kind, font: &FontId, dark: bool) -> TextFormat {
+    let c = Color32::from_rgb;
+    let (color, italics) = if dark {
+        match kind {
+            Kind::Normal => (c(0xd4, 0xd4, 0xd4), false),
+            Kind::Keyword => (c(0x56, 0x9c, 0xd6), false),
+            Kind::Builtin => (c(0xc5, 0x86, 0xc0), false),
+            Kind::DefName => (c(0x4e, 0xc9, 0xb0), false),
+            Kind::Call => (c(0xdc, 0xdc, 0xaa), false),
+            Kind::Decorator => (c(0xd7, 0xba, 0x7d), false),
+            Kind::SelfKw => (c(0x9c, 0xdc, 0xfe), true),
+            Kind::Ui => (c(0xff, 0x7e, 0xb6), false),
+            Kind::Number => (c(0xb5, 0xce, 0xa8), false),
+            Kind::Str => (c(0xce, 0x91, 0x78), false),
+            Kind::FExpr => (c(0x7f, 0xb7, 0xff), false),
+            Kind::Doc => (c(0x7f, 0x9a, 0x7f), true),
+            Kind::Comment => (c(0x6a, 0x99, 0x55), true),
+            Kind::Op => (c(0xaa, 0xb0, 0xbb), false),
+        }
+    } else {
+        match kind {
+            Kind::Normal => (c(0x10, 0x10, 0x10), false),
+            Kind::Keyword => (c(0x00, 0x00, 0xc0), false),
+            Kind::Builtin => (c(0x7a, 0x3e, 0x9d), false),
+            Kind::DefName => (c(0x00, 0x62, 0x7a), false),
+            Kind::Call => (c(0x79, 0x5e, 0x26), false),
+            Kind::Decorator => (c(0x9e, 0x88, 0x0d), false),
+            Kind::SelfKw => (c(0x94, 0x55, 0x8d), true),
+            Kind::Ui => (c(0xb0, 0x00, 0x6a), false),
+            Kind::Number => (c(0x09, 0x86, 0x58), false),
+            Kind::Str => (c(0xa3, 0x15, 0x15), false),
+            Kind::FExpr => (c(0x1a, 0x5a, 0xa0), false),
+            Kind::Doc => (c(0x4d, 0x6b, 0x4d), true),
+            Kind::Comment => (c(0x00, 0x80, 0x00), true),
+            Kind::Op => (c(0x40, 0x40, 0x40), false),
+        }
     };
     TextFormat { font_id: font.clone(), color, italics, ..Default::default() }
 }
@@ -283,10 +303,10 @@ fn tokenize(text: &str) -> Vec<(Kind, usize, usize)> {
     out
 }
 
-pub fn highlight(text: &str, font: &FontId) -> LayoutJob {
+pub fn highlight(text: &str, font: &FontId, dark: bool) -> LayoutJob {
     let mut job = LayoutJob::default();
     for (kind, a, b) in tokenize(text) {
-        job.append(&text[a..b], 0.0, style(kind, font));
+        job.append(&text[a..b], 0.0, style(kind, font, dark));
     }
     job
 }

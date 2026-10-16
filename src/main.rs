@@ -6,7 +6,9 @@ mod editing;
 mod libs;
 mod model;
 mod pyhl;
+mod settings;
 mod state;
+mod theme;
 
 use std::path::{Path, PathBuf};
 
