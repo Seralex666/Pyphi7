@@ -3,6 +3,7 @@
 # Diese Datei wird bei jedem "Code erzeugen" neu geschrieben.
 # Deine eigenen Funktionen gehoeren nach @@STEM@@_logic.py
 import os
+import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -45,6 +46,46 @@ class _Tip:
         if self.tw:
             self.tw.destroy()
             self.tw = None
+
+
+@@DBHUB@@class _Grid(ttk.Frame):
+    """Tabelle (Datagrid): Treeview mit Bildlaufleiste."""
+
+    def __init__(self, master, columns):
+        super().__init__(master)
+        self.silent = False
+        self.tree = ttk.Treeview(self, show="headings", selectmode="browse")
+        sb = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=sb.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        sb.grid(row=0, column=1, sticky="ns")
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+        self.set_columns(columns)
+        self.bind("<Configure>", lambda e: self._widths())
+
+    def set_columns(self, columns):
+        self.cols = [str(c) for c in columns]
+        self.tree.configure(columns=list(range(len(self.cols))))
+        for i, c in enumerate(self.cols):
+            self.tree.heading(i, text=c)
+        self._widths()
+
+    def _widths(self):
+        n = max(len(self.cols), 1)
+        w = max((self.winfo_width() - 20) // n, 30)
+        for i in range(len(self.cols)):
+            self.tree.column(i, width=w, minwidth=30, stretch=True)
+
+    def fill(self, rows):
+        self.silent = True
+        self.tree.delete(*self.tree.get_children())
+        for r in rows:
+            self.tree.insert("", "end", values=["" if v is None else str(v) for v in r])
+        self.tree.after_idle(self._unmute)
+
+    def _unmute(self):
+        self.silent = False
 
 
 class _Timer:
@@ -106,6 +147,8 @@ class Window:
         self._images = {}  # Bild-Referenzen (sonst verschwinden sie)
         self._stretch = {}
         self._fonts = []   # Font-Objekte am Leben halten
+        self._dbh = _DbHub()  # SQLite-Datenbanken
+        self._tables = {}  # Datentabellen: Name -> Zeilen
         self._on_close_fn = ""
         self._in_close = False
         self.key = ""      # zuletzt gedrueckte Taste (fuer OnKeyPress)

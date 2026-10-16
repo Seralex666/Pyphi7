@@ -245,6 +245,36 @@ fn paint_icon(p: &Painter, r: Rect, kind: Option<WType>, font: &FontId) {
                 Stroke::NONE,
             ));
         }
+        Some(WType::Database) => {
+            let (ex, ey) = (6.5, 2.5);
+            fill(p, c.x - ex, c.y - 4.5, c.x + ex, c.y + 4.5, Color32::from_rgb(0xc8, 0xd8, 0xf0));
+            vline(p, c.x - ex, c.y - 4.5, c.y + 4.5, DARK);
+            vline(p, c.x + ex, c.y - 4.5, c.y + 4.5, DARK);
+            for dy in [-4.5f32, 0.0, 4.5] {
+                let top = pos2(c.x, c.y + dy);
+                let mut pts = Vec::new();
+                for i in 0..=12 {
+                    let a = std::f32::consts::PI * (i as f32) / 12.0;
+                    pts.push(top + vec2(-ex * a.cos(), if dy < 0.0 { -ey * a.sin() } else { ey * a.sin() }));
+                }
+                p.add(egui::Shape::line(pts, Stroke::new(1.0, DARK)));
+            }
+            p.add(egui::Shape::closed_line(
+                (0..16).map(|i| {
+                    let a = std::f32::consts::TAU * (i as f32) / 16.0;
+                    pos2(c.x + ex * a.cos(), c.y - 4.5 + ey * a.sin())
+                }).collect(),
+                Stroke::new(1.0, DARK),
+            ));
+        }
+        Some(WType::Datagrid) => {
+            bevel(p, x1, y1 - 1.0, x2, y2 + 1.0, true, WHITE);
+            fill(p, x1 + 2.0, y1 + 1.0, x2 - 2.0, y1 + 4.0, FACE);
+            vline(p, c.x, y1 + 1.0, y2 - 1.0, GRAY);
+            for i in 0..3 {
+                hline(p, x1 + 2.0, x2 - 2.0, y1 + 4.0 + i as f32 * 3.0, GRAY);
+            }
+        }
         Some(WType::Timer) => {
             p.circle_filled(c, 7.0, WHITE);
             p.circle_stroke(c, 7.0, Stroke::new(1.0, BLACK));
@@ -668,7 +698,12 @@ impl App {
                     ui.end_row();
                 }
             });
-            ui.add_space(10.0);
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new("Schon in Python enthalten (nichts zu installieren): sqlite3 (Datenbank – Komponenten im Palette-Reiter „Bibliotheken“), tkinter, json, csv, datetime, decimal, random …")
+                    .color(GRAY),
+            );
+            ui.add_space(4.0);
             ui.separator();
             ui.label("Anderes Paket (Name wie bei pip, mehrere mit Leerzeichen)");
             ui.horizontal(|ui| {
@@ -957,6 +992,15 @@ impl App {
                         if r.hovered() {
                             self.hint = wt.info().hint.into();
                         }
+                    }
+                    // Reiter "Bibliotheken": zusaetzlich Knopf zur pip-Verwaltung
+                    if model::PALETTE[self.pal_tab.min(model::PALETTE.len() - 1)].0 == "Bibliotheken" {
+                        ui.add_space(10.0);
+                        let r = ui.add_sized([110.0, 30.0], egui::Button::new("Python-Pakete (pip)…"));
+                        if r.clicked() {
+                            self.st.view = View::Libs;
+                        }
+                        r.on_hover_text("Python-Pakete installieren, aktualisieren, entfernen");
                     }
                 });
             });
@@ -1918,6 +1962,57 @@ fn draw_widget(p: &Painter, org: egui::Pos2, wd: &model::Widget, base: &FontId) 
             fill(p, cx - tw.x / 2.0 - 2.0, cy - tw.y / 2.0, cx + tw.x / 2.0 + 2.0, cy + tw.y / 2.0, FACE);
             p.text(pos2(cx, cy), Align2::CENTER_CENTER, t, base.clone(), BLACK);
         }
+        WType::Database => {
+            bevel(p, x1, y1, x2, y2, false, FACE);
+            let (ex, ey) = (7.0, 3.0);
+            let c = pos2(cx + 0.5, cy + 0.5);
+            fill(p, c.x - ex, c.y - 5.0, c.x + ex, c.y + 5.0, Color32::from_rgb(0xc8, 0xd8, 0xf0));
+            vline(p, c.x - ex, c.y - 5.0, c.y + 5.0, DARK);
+            vline(p, c.x + ex, c.y - 5.0, c.y + 5.0, DARK);
+            for dy in [-5.0f32, 0.0, 5.0] {
+                let top = pos2(c.x, c.y + dy);
+                let pts: Vec<_> = (0..=12)
+                    .map(|i| {
+                        let a = std::f32::consts::PI * (i as f32) / 12.0;
+                        top + vec2(-ex * a.cos(), if dy < 0.0 { -ey * a.sin() } else { ey * a.sin() })
+                    })
+                    .collect();
+                p.add(egui::Shape::line(pts, Stroke::new(1.0, DARK)));
+            }
+            let top: Vec<_> = (0..16)
+                .map(|i| {
+                    let a = std::f32::consts::TAU * (i as f32) / 16.0;
+                    pos2(c.x + ex * a.cos(), c.y - 5.0 + ey * a.sin())
+                })
+                .collect();
+            p.add(egui::Shape::closed_line(top, Stroke::new(1.0, DARK)));
+        }
+        WType::Datagrid => {
+            bevel(p, x1, y1, x2, y2, true, WHITE);
+            let cols = {
+                let c = model::items_of(wd);
+                if c.is_empty() { vec!["Spalte1".to_string(), "Spalte2".to_string()] } else { c }
+            };
+            let hh = lh + 3.0;
+            fill(p, x1 + 2.0, y1 + 2.0, x2 - 2.0, y1 + 2.0 + hh, FACE);
+            hline(p, x1 + 2.0, x2 - 2.0, y1 + 2.0 + hh, GRAY);
+            let cw = ((w - 4.0) / cols.len() as f32).max(20.0);
+            for (i, name) in cols.iter().enumerate() {
+                let cx0 = x1 + 2.0 + i as f32 * cw;
+                if cx0 + 6.0 > x2 {
+                    break;
+                }
+                if i > 0 {
+                    vline(p, cx0, y1 + 2.0, y1 + 2.0 + hh, GRAY);
+                }
+                put(p, pos2(cx0 + 4.0, y1 + 2.0 + hh / 2.0), Align2::LEFT_CENTER, &fit(p, name, font, (cw - 8.0).min(x2 - cx0 - 6.0)), font, BLACK, true);
+            }
+            let mut yy = y1 + 3.0 + hh + lh;
+            while yy < y2 - 2.0 {
+                hline(p, x1 + 2.0, x2 - 2.0, yy, Color32::from_rgb(0xe0, 0xe0, 0xe0));
+                yy += lh + 2.0;
+            }
+        }
         WType::Timer => {
             bevel(p, x1, y1, x2, y2, false, FACE);
             let c = pos2(cx + 0.5, cy + 0.5);
@@ -2147,7 +2242,7 @@ impl eframe::App for App {
                     ui.spacing_mut().item_spacing.x = 2.0;
                     let code_name = self.st.stem().map(|s| format!("{}_logic.py", s)).unwrap_or_else(|| "Unit1.py".into());
                     let form_name = if self.st.proj.title.is_empty() { FORM_CLASS.to_string() } else { self.st.proj.title.clone() };
-                    for (view, name) in [(View::Form, form_name), (View::Code, code_name), (View::Libs, "Bibliotheken".to_string())] {
+                    for (view, name) in [(View::Form, form_name), (View::Code, code_name), (View::Libs, "Python-Pakete".to_string())] {
                         if ui.selectable_label(self.st.view == view, name).clicked() {
                             self.st.view = view;
                         }

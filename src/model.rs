@@ -22,10 +22,14 @@ pub enum WType {
     Spinedit,
     Image,
     Timer,
+    /// SQLite-Datenbank (nicht sichtbar)
+    Database,
+    /// Tabelle (Spalten x Zeilen), z. B. fuer Abfrage-Ergebnisse
+    Datagrid,
 }
 
 /// Palettenseiten wie in Delphi: (Name, Komponenten)
-pub const PALETTE: [(&str, &[WType]); 3] = [
+pub const PALETTE: [(&str, &[WType]); 4] = [
     (
         "Standard",
         &[
@@ -43,6 +47,7 @@ pub const PALETTE: [(&str, &[WType]); 3] = [
     ),
     ("Zusätzlich", &[WType::Progressbar, WType::Trackbar, WType::Spinedit, WType::Image]),
     ("System", &[WType::Timer]),
+    ("Bibliotheken", &[WType::Database, WType::Datagrid]),
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -118,11 +123,13 @@ impl WType {
             WType::Spinedit => "Spinedit",
             WType::Image => "Image",
             WType::Timer => "Timer",
+            WType::Database => "Database",
+            WType::Datagrid => "Datagrid",
         }
     }
 
     pub fn is_list(self) -> bool {
-        matches!(self, WType::Listbox | WType::Combobox)
+        matches!(self, WType::Listbox | WType::Combobox | WType::Datagrid)
     }
 
     /// Container zeichnen sich hinter ihren "Kindern" und ziehen diese beim Verschieben mit.
@@ -132,17 +139,17 @@ impl WType {
 
     /// Nicht-visuelle Komponente (Timer): nur ein Symbol im Designer.
     pub fn is_visual(self) -> bool {
-        self != WType::Timer
+        !matches!(self, WType::Timer | WType::Database)
     }
 
     /// Hat Schrift-Eigenschaften (Font.Size / Bold / Color)?
     pub fn has_font(self) -> bool {
-        !matches!(self, WType::Progressbar | WType::Trackbar | WType::Image | WType::Timer)
+        !matches!(self, WType::Progressbar | WType::Trackbar | WType::Image | WType::Timer | WType::Database | WType::Datagrid)
     }
 
     /// Hat der Typ einen Text (Caption/Text/Items/Lines)?
     pub fn has_text(self) -> bool {
-        !matches!(self, WType::Progressbar | WType::Trackbar | WType::Image | WType::Timer | WType::Spinedit)
+        !matches!(self, WType::Progressbar | WType::Trackbar | WType::Image | WType::Timer | WType::Spinedit | WType::Database)
     }
 
     pub fn info(self) -> Info {
@@ -177,6 +184,10 @@ impl WType {
                 event: None, suffix: None, hint: "Image - Bild (PNG/GIF, mit Pillow auch JPG)" },
             WType::Timer => Info { cls: "TTimer", base: "Timer", text_prop: "", w: 24, h: 24,
                 event: Some("OnTimer"), suffix: Some("Timer"), hint: "Timer - ruft in festem Takt eine Funktion auf" },
+            WType::Database => Info { cls: "TSQLite", base: "Database", text_prop: "", w: 24, h: 24,
+                event: None, suffix: None, hint: "Database - SQLite-Datenbank (Datei wird bei Bedarf angelegt)" },
+            WType::Datagrid => Info { cls: "TDataGrid", base: "Grid", text_prop: "Columns", w: 241, h: 129,
+                event: Some("OnClick"), suffix: Some("Click"), hint: "Grid - Tabelle (Columns: Spaltenüberschriften, Zeile pro Spalte)" },
         }
     }
 
@@ -192,6 +203,7 @@ impl WType {
                 v.push(ev("OnDblClick", "DblClick"));
                 v.extend(EV_FOCUS_KEY.iter());
             }
+            WType::Datagrid => v.push(ev("OnDblClick", "DblClick")),
             _ => {}
         }
         v
@@ -245,6 +257,7 @@ impl WType {
                 v.push(pd("stretch", "Stretch", PK::Bool, "True"));
             }
             WType::Timer => v.push(pd("interval", "Interval", PK::Int, "1000")),
+            WType::Database => v.push(pd("file", "FileName", PK::Text, "daten.db")),
             _ => {}
         }
         if self.has_font() {

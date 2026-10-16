@@ -63,14 +63,16 @@
         wd, kind = self.w[name], self.kinds[name]
         if kind == "Text":
             return wd.get("1.0", "end-1c")
-        if kind in ("Entry", "Combobox"):
+        if kind == "Entry":
+            return self._vars[name].get()   # aktuell, auch mitten in OnChange
+        if kind == "Combobox":
             return wd.get()
         if kind == "Spinedit":
             return str(self.get_value(name))
         if kind == "Listbox":
             sel = wd.curselection()
             return wd.get(sel[0]) if sel else ""
-        if kind in ("Progressbar", "Trackbar", "Image", "Timer"):
+        if kind in ("Progressbar", "Trackbar", "Image", "Timer", "Database", "Datagrid"):
             return ""
         return wd.cget("text")
 
@@ -89,7 +91,7 @@
             wd.set(text)
         elif kind == "Spinedit":
             self.set_value(name, int(float(text)))
-        elif kind in ("Progressbar", "Trackbar", "Image", "Timer"):
+        elif kind in ("Progressbar", "Trackbar", "Image", "Timer", "Database", "Datagrid"):
             pass
         else:
             wd.configure(text=text)
@@ -169,6 +171,9 @@
         if kind == "Listbox":
             sel = wd.curselection()
             return sel[0] if sel else -1
+        if kind == "Datagrid":
+            sel = wd.tree.selection()
+            return wd.tree.index(sel[0]) if sel else -1
         return wd.current()
 
     def set_selected_index(self, name, index):
@@ -178,6 +183,11 @@
             if index >= 0:
                 wd.selection_set(index)
                 wd.see(index)
+        elif kind == "Datagrid":
+            kids = wd.tree.get_children()
+            wd.tree.selection_set(kids[index] if 0 <= index < len(kids) else ())
+            if 0 <= index < len(kids):
+                wd.tree.see(kids[index])
         elif kind == "Combobox":
             if index < 0:
                 wd.set("")
@@ -188,6 +198,10 @@
         wd, kind = self.w[name], self.kinds[name]
         if kind == "Timer":
             wd.start() if flag else wd.stop()
+        elif kind == "Database":
+            pass
+        elif kind == "Datagrid":
+            wd.tree.configure(selectmode="browse" if flag else "none")
         elif kind == "Text":
             wd.configure(state="normal" if flag and name not in self._ro else "disabled")
         elif kind in ("Listbox", "Trackbar", "Panel", "Image"):
@@ -196,7 +210,7 @@
             wd.state(["!disabled" if flag else "disabled"])
 
     def set_visible(self, name, flag=True):
-        if self.kinds[name] == "Timer":
+        if self.kinds[name] in ("Timer", "Database"):
             return
         if flag:
             self.w[name].place(**self._geo[name])
@@ -229,6 +243,81 @@
                     img = None
         self._images[name] = img
         wd.configure(image=img if img else "")
+
+    def set_table(self, name, columns, rows):
+        """Datentabelle fuellen: Spaltenueberschriften (oder None) + Zeilen (Tupel)."""
+        wd = self.w[name]
+        rows = [tuple(r) for r in rows]
+        if columns is not None:
+            wd.set_columns(columns)
+        wd.fill(rows)
+        self._tables[name] = rows
+
+    # ---- Datenbank (SQLite) --------------------------------------------
+    def _database(self, name, path):
+        self.w[name] = self._dbh.open(path, name)
+        self.kinds[name] = "Database"
+
+    def db_open(self, path, db=None):
+        """Datenbank-Datei oeffnen (wird angelegt, falls sie fehlt)."""
+        return self._dbh.open(path, db)
+
+    def db_close(self, db=None):
+        self._dbh.close(db)
+
+    def db_execute(self, sql, params=(), db=None):
+        """INSERT/UPDATE/DELETE/CREATE ... ausfuehren und speichern. -> Anzahl Zeilen"""
+        return self._dbh.execute(sql, params, db)
+
+    def db_executemany(self, sql, rows, db=None):
+        """Dasselbe SQL fuer viele Parameter-Zeilen ausfuehren."""
+        return self._dbh.executemany(sql, rows, db)
+
+    def db_script(self, sql, db=None):
+        """Mehrere SQL-Anweisungen auf einmal (z. B. CREATE TABLE ...)."""
+        self._dbh.script(sql, db)
+
+    def db_query(self, sql, params=(), db=None):
+        """SELECT ausfuehren. -> Liste von Tupeln"""
+        return self._dbh.query(sql, params, db)
+
+    def db_query_one(self, sql, params=(), db=None):
+        """SELECT ausfuehren. -> erste Zeile (Tupel) oder None"""
+        rows = self._dbh.query(sql, params, db)
+        return rows[0] if rows else None
+
+    def db_value(self, sql, params=(), db=None, default=None):
+        """SELECT ausfuehren. -> erster Wert der ersten Zeile (z. B. COUNT(*))"""
+        rows = self._dbh.query(sql, params, db)
+        return rows[0][0] if rows and rows[0][0] is not None else default
+
+    def db_columns(self):
+        """Spaltennamen der letzten Abfrage."""
+        return list(self._dbh.cols)
+
+    def db_last_id(self):
+        """Id der zuletzt eingefuegten Zeile."""
+        return self._dbh.last_id
+
+    def db_tables(self, db=None):
+        """Namen aller Tabellen der Datenbank."""
+        return self._dbh.tables(db)
+
+    def show_query(self, name, sql, params=(), db=None):
+        """SELECT ausfuehren und das Ergebnis in einer Datentabelle zeigen."""
+        rows = self._dbh.query(sql, params, db)
+        self.set_table(name, self._dbh.cols, rows)
+        return rows
+
+    def get_row(self, name):
+        """Gewaehlte Zeile einer Datentabelle (Tupel) oder None."""
+        i = self.selected_index(name)
+        rows = self._tables.get(name, [])
+        return rows[i] if 0 <= i < len(rows) else None
+
+    def get_rows(self, name):
+        """Alle Zeilen einer Datentabelle."""
+        return list(self._tables.get(name, []))
 
     def message(self, text, title="Hinweis"):
         messagebox.showinfo(title, str(text))

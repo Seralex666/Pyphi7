@@ -1,0 +1,81 @@
+def _data_dir():
+    """Ordner fuer Datenbank-Dateien: neben dem Programm (auch in der EXE)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return _HERE
+
+
+class _DbHub:
+    """SQLite-Zugriff (sqlite3 gehoert zu Python, nichts zu installieren)."""
+
+    def __init__(self):
+        self.conns = {}       # Name -> Verbindung
+        self.default = None   # Name der Standard-Datenbank
+        self.cols = []        # Spaltennamen der letzten Abfrage
+        self.last_id = None
+
+    def open(self, path, name=None):
+        import sqlite3
+        name = name or self.default or "main"
+        path = str(path)
+        if path != ":memory:" and not os.path.isabs(path):
+            path = os.path.join(_data_dir(), path)
+        folder = os.path.dirname(path)
+        if folder:
+            os.makedirs(folder, exist_ok=True)
+        old = self.conns.pop(name, None)
+        if old is not None:
+            old.close()
+        con = sqlite3.connect(path)
+        con.execute("PRAGMA foreign_keys = ON")
+        self.conns[name] = con
+        if self.default is None:
+            self.default = name
+        return con
+
+    def get(self, db=None):
+        name = db or self.default
+        if name not in self.conns:
+            raise RuntimeError(
+                "Keine Datenbank geoeffnet. Datenbank-Komponente einfuegen "
+                "oder ui.db_open('daten.db') aufrufen.")
+        return self.conns[name]
+
+    def close(self, db=None):
+        name = db or self.default
+        con = self.conns.pop(name, None)
+        if con is not None:
+            con.close()
+        if self.default == name:
+            self.default = next(iter(self.conns), None)
+
+    def execute(self, sql, params=(), db=None):
+        con = self.get(db)
+        cur = con.execute(sql, tuple(params))
+        con.commit()
+        self.last_id = cur.lastrowid
+        return cur.rowcount
+
+    def executemany(self, sql, rows, db=None):
+        con = self.get(db)
+        cur = con.executemany(sql, [tuple(r) for r in rows])
+        con.commit()
+        self.last_id = cur.lastrowid
+        return cur.rowcount
+
+    def script(self, sql, db=None):
+        con = self.get(db)
+        con.executescript(sql)
+        con.commit()
+
+    def query(self, sql, params=(), db=None):
+        cur = self.get(db).execute(sql, tuple(params))
+        self.cols = [d[0] for d in (cur.description or [])]
+        return cur.fetchall()
+
+    def tables(self, db=None):
+        rows = self.query("SELECT name FROM sqlite_master WHERE type='table' "
+                          "AND name NOT LIKE 'sqlite_%' ORDER BY name", (), db)
+        return [r[0] for r in rows]
+
+

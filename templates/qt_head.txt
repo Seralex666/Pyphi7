@@ -10,7 +10,8 @@ from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QLineEdit,
                                QCheckBox, QRadioButton, QButtonGroup, QGroupBox, QFrame,
                                QProgressBar, QSlider, QSpinBox, QListWidget,
-                               QPlainTextEdit, QComboBox, QMessageBox)
+                               QPlainTextEdit, QComboBox, QMessageBox, QTableWidget,
+                               QTableWidgetItem, QAbstractItemView, QHeaderView)
 
 import @@STEM@@_logic as logic
 
@@ -23,7 +24,7 @@ _KEYNAMES = {_K.Key_Return: "Enter", _K.Key_Enter: "Enter", _K.Key_Escape: "Esca
              _K.Key_PageDown: "PageDown", _K.Key_Insert: "Insert"}
 
 
-class Window(QWidget):
+@@DBHUB@@class Window(QWidget):
     """Das Fenster. Deine Funktionen bekommen es als 'ui' uebergeben."""
 
     def __init__(self):
@@ -35,6 +36,8 @@ class Window(QWidget):
         self.kinds = {}    # Name -> Typ
         self._ev = {}      # Widget -> Ereignisse (Fokus, Tasten)
         self._groups = {}  # RadioButton-Gruppen
+        self._dbh = _DbHub()  # SQLite-Datenbanken
+        self._tables = {}  # Datentabellen: Name -> Zeilen
         self._on_close_fn = ""
         self._in_close = False
         self.key = ""      # zuletzt gedrueckte Taste (fuer OnKeyPress)

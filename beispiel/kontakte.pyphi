@@ -1,0 +1,150 @@
+{
+  "version": 2,
+  "title": "Kontakte",
+  "width": 480,
+  "height": 350,
+  "on_create": "FormCreate",
+  "on_close": "",
+  "color": "",
+  "center": true,
+  "widgets": [
+    {
+      "type": "Database",
+      "name": "Database1",
+      "text": "",
+      "x": 440,
+      "y": 8,
+      "w": 24,
+      "h": 24,
+      "enabled": true,
+      "visible": true,
+      "handler": "",
+      "props": {
+        "file": "kontakte.db"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblName",
+      "text": "Name:",
+      "x": 12,
+      "y": 14,
+      "w": 60,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Entry",
+      "name": "EdName",
+      "text": "",
+      "x": 76,
+      "y": 10,
+      "w": 150,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Label",
+      "name": "LblTel",
+      "text": "Telefon:",
+      "x": 240,
+      "y": 14,
+      "w": 60,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Entry",
+      "name": "EdTel",
+      "text": "",
+      "x": 304,
+      "y": 10,
+      "w": 130,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Button",
+      "name": "BtnAdd",
+      "text": "Hinzufügen",
+      "x": 12,
+      "y": 42,
+      "w": 100,
+      "h": 25,
+      "enabled": true,
+      "visible": true,
+      "handler": "BtnAddClick"
+    },
+    {
+      "type": "Button",
+      "name": "BtnDelete",
+      "text": "Löschen",
+      "x": 120,
+      "y": 42,
+      "w": 100,
+      "h": 25,
+      "enabled": true,
+      "visible": true,
+      "handler": "BtnDeleteClick"
+    },
+    {
+      "type": "Label",
+      "name": "LblSearch",
+      "text": "Suche:",
+      "x": 260,
+      "y": 48,
+      "w": 50,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    },
+    {
+      "type": "Entry",
+      "name": "EdSearch",
+      "text": "",
+      "x": 312,
+      "y": 44,
+      "w": 122,
+      "h": 21,
+      "enabled": true,
+      "visible": true,
+      "handler": "EdSearchChange"
+    },
+    {
+      "type": "Datagrid",
+      "name": "Grid1",
+      "text": "ID|Name|Telefon",
+      "x": 12,
+      "y": 80,
+      "w": 454,
+      "h": 230,
+      "enabled": true,
+      "visible": true,
+      "handler": "Grid1Click",
+      "events": {
+        "OnDblClick": "Grid1DblClick"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "text": "",
+      "x": 12,
+      "y": 322,
+      "w": 300,
+      "h": 17,
+      "enabled": true,
+      "visible": true,
+      "handler": ""
+    }
+  ]
+}

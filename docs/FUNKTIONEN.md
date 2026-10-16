@@ -14,12 +14,13 @@ Der Name ist die Eigenschaft *Name* im Objektinspektor.
 
 ## Inhalt
 1. [Die ui-Funktionen](#die-ui-funktionen)
-2. [Komponenten: Eigenschaften und Ereignisse](#komponenten)
-3. [Formular](#formular)
-4. [Ereignis-Funktionen](#ereignis-funktionen)
-5. [Tastennamen (ui.key)](#tastennamen)
-6. [Eigene Funktionen und Module](#eigene-funktionen)
-7. [Welche Funktion passt zu welcher Komponente](#übersicht)
+2. [Datenbank (SQLite) und Datentabelle](#datenbank-sqlite)
+3. [Komponenten: Eigenschaften und Ereignisse](#komponenten)
+4. [Formular](#formular)
+5. [Ereignis-Funktionen](#ereignis-funktionen)
+6. [Tastennamen (ui.key)](#tastennamen)
+7. [Eigene Funktionen und Module](#eigene-funktionen)
+8. [Welche Funktion passt zu welcher Komponente](#übersicht)
 
 ---
 
@@ -99,6 +100,73 @@ if ui.ask_yes_no("Wirklich löschen?"):
 
 ---
 
+## Datenbank (SQLite)
+
+SQLite ist in Python eingebaut (`sqlite3`), du musst nichts installieren. Im Palette-Reiter
+**Bibliotheken** liegen zwei Komponenten:
+
+* **Database** (nicht sichtbar, wie der Timer): Eigenschaft **FileName** (Standard `daten.db`).
+  Die Datei wird beim Programmstart geöffnet und bei Bedarf **neu angelegt**. Ein relativer Name liegt
+  **neben dem Programm** (auch in der exportierten EXE). Die erste Database-Komponente ist die Standard-Datenbank.
+* **Grid** (Datentabelle): zeigt Zeilen und Spalten. Eigenschaft **Columns** (Spaltenüberschriften,
+  eine Zeile pro Spalte, „…“-Knopf) – oder die Spalten kommen automatisch aus der Abfrage.
+  Ereignisse: **OnClick** (Zeile gewählt) und **OnDblClick**.
+
+Tabellen legst du im Programm per SQL an, z. B. in `FormCreate`:
+
+```python
+def FormCreate(ui):
+    ui.db_script("""
+        CREATE TABLE IF NOT EXISTS kontakte (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            name    TEXT NOT NULL,
+            telefon TEXT
+        );
+    """)
+    ui.show_query("Grid1", "SELECT id, name, telefon FROM kontakte ORDER BY name")
+```
+
+### Datenbank-Funktionen
+Alle haben den optionalen Parameter `db=` (Name einer Database-Komponente, z. B. `db="Database2"`);
+ohne Angabe wird die Standard-Datenbank verwendet.
+
+| Funktion | Beschreibung |
+|---|---|
+| `ui.db_open(pfad, db=None)` | Datenbank-Datei öffnen (wird angelegt). Nötig, wenn du keine Database-Komponente benutzt; `":memory:"` = Datenbank nur im Arbeitsspeicher. Ohne `db=` ersetzt der Aufruf die Standard-Datenbank. |
+| `ui.db_close(db=None)` | Verbindung schließen. |
+| `ui.db_execute(sql, params=())` | INSERT / UPDATE / DELETE / CREATE … ausführen und **speichern**. Liefert die Anzahl betroffener Zeilen. |
+| `ui.db_executemany(sql, zeilen)` | Dasselbe SQL für viele Parameter-Tupel. |
+| `ui.db_script(sql)` | Mehrere Anweisungen auf einmal (z. B. mehrere `CREATE TABLE`). |
+| `ui.db_query(sql, params=())` | SELECT. Liefert eine Liste von Tupeln. |
+| `ui.db_query_one(sql, params=())` | SELECT. Liefert die erste Zeile (Tupel) oder `None`. |
+| `ui.db_value(sql, params=(), default=None)` | SELECT. Liefert den ersten Wert der ersten Zeile, z. B. bei `COUNT(*)`. |
+| `ui.db_columns()` | Spaltennamen der letzten Abfrage. |
+| `ui.db_last_id()` | Id der zuletzt eingefügten Zeile. |
+| `ui.db_tables()` | Namen aller Tabellen. |
+
+**Werte immer als Parameter übergeben** (`?`), nie in den SQL-Text einbauen – das verhindert Fehler mit
+Sonderzeichen und SQL-Injection:
+
+```python
+ui.db_execute("INSERT INTO kontakte (name, telefon) VALUES (?, ?)", (name, telefon))
+rows = ui.db_query("SELECT * FROM kontakte WHERE name LIKE ?", ("%" + suche + "%",))
+```
+
+### Datentabelle (Grid)
+| Funktion | Beschreibung |
+|---|---|
+| `ui.show_query(name, sql, params=())` | SELECT ausführen und das Ergebnis samt Spaltennamen in der Tabelle zeigen. Liefert die Zeilen. |
+| `ui.set_table(name, spalten, zeilen)` | Tabelle von Hand füllen. `spalten=None` behält die Überschriften aus dem Designer. |
+| `ui.get_row(name)` | Gewählte Zeile als Tupel (mit den echten Werten, z. B. Zahlen) oder `None`. |
+| `ui.get_rows(name)` | Alle Zeilen. |
+| `ui.selected_index(name)` / `ui.set_selected_index(name, i)` | Gewählte Zeilennummer (`-1` = keine) lesen/setzen. |
+
+Das Füllen der Tabelle löst **kein** `OnClick` aus – nur eine Auswahl durch den Benutzer oder
+`set_selected_index`. Ein vollständiges Beispiel (Kontakte mit Suchen, Hinzufügen, Löschen) liegt in
+`beispiel/kontakte.pyphi`.
+
+---
+
 ## Komponenten
 
 Jede Komponente hat zusätzlich zu den allgemeinen Eigenschaften **Name, Left, Top, Width, Height,
@@ -171,6 +239,10 @@ Ereignis: **OnChange** (`SpinEdit1Change`). Funktionen: `get_value`, `set_value`
 ### Image (TImage)
 Bild. Eigenschaften: **Picture** (Dateipfad, relativ zum Projekt), **Stretch** (an Komponentengröße anpassen).
 Kein Ereignis. Funktion: `set_image`.
+
+### Database (TSQLite) und Grid (TDataGrid)
+Siehe [Datenbank (SQLite)](#datenbank-sqlite). Database: Eigenschaft **FileName**, kein Ereignis.
+Grid: Eigenschaft **Columns**, Ereignisse **OnClick** (`Grid1Click`), **OnDblClick** (`Grid1DblClick`).
 
 ### Timer (TTimer)
 Nicht sichtbar, ruft in festem Takt eine Funktion auf. Eigenschaft: **Interval** (Millisekunden).
@@ -265,5 +337,9 @@ def Button1Click(ui):
 | SpinEdit | `get_value` | `set_value` | OnChange |
 | Image | – | `set_image` | – |
 | Timer | – | `set_enabled`, `set_interval` | OnTimer |
+| Grid | `get_row`, `get_rows`, `selected_index` | `show_query`, `set_table`, `set_selected_index` | OnClick, OnDblClick |
+| Database | `db_query`, `db_query_one`, `db_value`, `db_tables` | `db_execute`, `db_executemany`, `db_script` | – |
 
 Für alle sichtbaren Komponenten gelten außerdem `set_enabled` und `set_visible`.
+
+> **Hinweis:** In einer `OnChange`-Funktion eines Edit liefert `ui.get_text` jetzt immer den aktuellen Text (auch unter Tkinter).

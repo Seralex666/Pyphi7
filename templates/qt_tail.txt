@@ -73,7 +73,7 @@
             return item.text() if item else ""
         if kind == "Spinedit":
             return str(wd.value())
-        if kind in ("Progressbar", "Trackbar", "Image", "Timer"):
+        if kind in ("Progressbar", "Trackbar", "Image", "Timer", "Database", "Datagrid"):
             return ""
         return wd.text()
 
@@ -89,7 +89,7 @@
                 wd.setCurrentIndex(wd.findText(text))
         elif kind == "Spinedit":
             wd.setValue(int(float(text)))
-        elif kind in ("Progressbar", "Trackbar", "Image", "Timer"):
+        elif kind in ("Progressbar", "Trackbar", "Image", "Timer", "Database", "Datagrid"):
             pass
         elif kind == "Groupbox":
             wd.setTitle(text)
@@ -142,12 +142,20 @@
         wd = self.w[name]
         if self.kinds[name] == "Listbox":
             return wd.currentRow()
+        if self.kinds[name] == "Datagrid":
+            sel = wd.selectionModel().selectedRows()
+            return sel[0].row() if sel else -1
         return wd.currentIndex()
 
     def set_selected_index(self, name, index):
         wd = self.w[name]
         if self.kinds[name] == "Listbox":
             wd.setCurrentRow(index)
+        elif self.kinds[name] == "Datagrid":
+            if 0 <= index < wd.rowCount():
+                wd.selectRow(index)
+            else:
+                wd.clearSelection()
         else:
             wd.setCurrentIndex(index)
 
@@ -155,11 +163,11 @@
         wd = self.w[name]
         if self.kinds[name] == "Timer":
             wd.start() if flag else wd.stop()
-        else:
+        elif self.kinds[name] != "Database":
             wd.setEnabled(bool(flag))
 
     def set_visible(self, name, flag=True):
-        if self.kinds[name] != "Timer":
+        if self.kinds[name] not in ("Timer", "Database"):
             self.w[name].setVisible(bool(flag))
 
     def set_interval(self, name, ms):
@@ -171,6 +179,91 @@
         full = path if os.path.isabs(path) else os.path.join(_HERE, path)
         pix = QPixmap(full) if path else QPixmap()
         self.w[name].setPixmap(pix)
+
+    def set_table(self, name, columns, rows):
+        """Datentabelle fuellen: Spaltenueberschriften (oder None) + Zeilen (Tupel)."""
+        wd = self.w[name]
+        rows = [tuple(r) for r in rows]
+        wd.blockSignals(True)
+        if columns is not None:
+            wd.setColumnCount(len(columns))
+            wd.setHorizontalHeaderLabels([str(c) for c in columns])
+        wd.clearContents()
+        wd.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            for c, v in enumerate(row):
+                if c < wd.columnCount():
+                    wd.setItem(r, c, QTableWidgetItem("" if v is None else str(v)))
+        wd.clearSelection()
+        wd.setCurrentCell(-1, -1)
+        wd.blockSignals(False)
+        self._tables[name] = rows
+
+    # ---- Datenbank (SQLite) --------------------------------------------
+    def _database(self, name, path):
+        self.w[name] = self._dbh.open(path, name)
+        self.kinds[name] = "Database"
+
+    def db_open(self, path, db=None):
+        """Datenbank-Datei oeffnen (wird angelegt, falls sie fehlt)."""
+        return self._dbh.open(path, db)
+
+    def db_close(self, db=None):
+        self._dbh.close(db)
+
+    def db_execute(self, sql, params=(), db=None):
+        """INSERT/UPDATE/DELETE/CREATE ... ausfuehren und speichern. -> Anzahl Zeilen"""
+        return self._dbh.execute(sql, params, db)
+
+    def db_executemany(self, sql, rows, db=None):
+        """Dasselbe SQL fuer viele Parameter-Zeilen ausfuehren."""
+        return self._dbh.executemany(sql, rows, db)
+
+    def db_script(self, sql, db=None):
+        """Mehrere SQL-Anweisungen auf einmal (z. B. CREATE TABLE ...)."""
+        self._dbh.script(sql, db)
+
+    def db_query(self, sql, params=(), db=None):
+        """SELECT ausfuehren. -> Liste von Tupeln"""
+        return self._dbh.query(sql, params, db)
+
+    def db_query_one(self, sql, params=(), db=None):
+        """SELECT ausfuehren. -> erste Zeile (Tupel) oder None"""
+        rows = self._dbh.query(sql, params, db)
+        return rows[0] if rows else None
+
+    def db_value(self, sql, params=(), db=None, default=None):
+        """SELECT ausfuehren. -> erster Wert der ersten Zeile (z. B. COUNT(*))"""
+        rows = self._dbh.query(sql, params, db)
+        return rows[0][0] if rows and rows[0][0] is not None else default
+
+    def db_columns(self):
+        """Spaltennamen der letzten Abfrage."""
+        return list(self._dbh.cols)
+
+    def db_last_id(self):
+        """Id der zuletzt eingefuegten Zeile."""
+        return self._dbh.last_id
+
+    def db_tables(self, db=None):
+        """Namen aller Tabellen der Datenbank."""
+        return self._dbh.tables(db)
+
+    def show_query(self, name, sql, params=(), db=None):
+        """SELECT ausfuehren und das Ergebnis in einer Datentabelle zeigen."""
+        rows = self._dbh.query(sql, params, db)
+        self.set_table(name, self._dbh.cols, rows)
+        return rows
+
+    def get_row(self, name):
+        """Gewaehlte Zeile einer Datentabelle (Tupel) oder None."""
+        i = self.selected_index(name)
+        rows = self._tables.get(name, [])
+        return rows[i] if 0 <= i < len(rows) else None
+
+    def get_rows(self, name):
+        """Alle Zeilen einer Datentabelle."""
+        return list(self._tables.get(name, []))
 
     def message(self, text, title="Hinweis"):
         QMessageBox.information(self, title, str(text))

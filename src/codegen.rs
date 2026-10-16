@@ -9,6 +9,7 @@ const TK_TAIL: &str = include_str!("../templates/tk_tail.txt");
 const QT_HEAD: &str = include_str!("../templates/qt_head.txt");
 const QT_TAIL: &str = include_str!("../templates/qt_tail.txt");
 const LOGIC_HEADER: &str = include_str!("../templates/logic_header.txt");
+const DB_HUB: &str = include_str!("../templates/db_hub.txt");
 const STUB: &str = include_str!("../templates/stub.txt");
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -62,7 +63,8 @@ fn py_list(items: &[String]) -> String {
 }
 
 fn rep(s: &str, stem: &str, proj: &Project) -> String {
-    s.replace("@@STEM@@", stem)
+    s.replace("@@DBHUB@@", DB_HUB)
+        .replace("@@STEM@@", stem)
         .replace("@@TITLE@@", &py_repr(&proj.title))
         .replace("@@W@@", &proj.width.to_string())
         .replace("@@H@@", &proj.height.to_string())
@@ -101,6 +103,7 @@ impl Look {
 /// Form-Ereignis- und Kennwerte (alles nach dem Kopf, vor den Komponenten).
 fn tk_extra_events(wd: &model::Widget) -> String {
     let mut o = String::new();
+    let tgt = if wd.wtype == WType::Datagrid { "_w.tree" } else { "_w" };
     for e in wd.wtype.events().iter().skip(0) {
         let f = wd.event_fn(e.name);
         if f.is_empty() {
@@ -111,7 +114,7 @@ fn tk_extra_events(wd: &model::Widget) -> String {
             "OnEnter" => o.push_str(&format!("        _w.bind('<FocusIn>', lambda e: self._call({}), add='+')\n", f)),
             "OnExit" => o.push_str(&format!("        _w.bind('<FocusOut>', lambda e: self._call({}), add='+')\n", f)),
             "OnKeyPress" => o.push_str(&format!("        _w.bind('<KeyPress>', lambda e: self._key(e, {}), add='+')\n", f)),
-            "OnDblClick" => o.push_str(&format!("        _w.bind('<Double-Button-1>', lambda e: self._call({}), add='+')\n", f)),
+            "OnDblClick" => o.push_str(&format!("        {}.bind('<Double-Button-1>', lambda e: self._call({}), add='+')\n", tgt, f)),
             _ => {}
         }
     }
@@ -143,6 +146,10 @@ pub fn gen_tk(proj: &Project, stem: &str) -> String {
                 b(wd.enabled),
                 py_repr(h)
             ));
+            continue;
+        }
+        if t == WType::Database {
+            o.push_str(&format!("        self._database({}, {})\n", py_repr(n), py_repr(wd.prop("file").trim())));
             continue;
         }
         let cmd = if h.is_empty() { String::new() } else { format!(", command=lambda: self._call({})", py_repr(h)) };
@@ -346,7 +353,16 @@ pub fn gen_tk(proj: &Project, stem: &str) -> String {
                 }
             }
             WType::Image => o.push_str(&format!("        _w = tk.Label(self.root, borderwidth=0{})\n", form_bg)),
-            WType::Timer => unreachable!(),
+            WType::Datagrid => {
+                o.push_str(&format!("        _w = _Grid(self.root, {})\n", py_list(&items_of(wd))));
+                if !h.is_empty() {
+                    o.push_str(&format!(
+                        "        _w.tree.bind('<<TreeviewSelect>>', lambda e, g=_w: None if g.silent else self._call({}))\n",
+                        py_repr(h)
+                    ));
+                }
+            }
+            WType::Timer | WType::Database => unreachable!(),
         }
         o.push_str(&tk_extra_events(wd));
         let hint = wd.prop("hint");
@@ -417,6 +433,10 @@ pub fn gen_qt(proj: &Project, stem: &str) -> String {
                 b(wd.enabled),
                 py_repr(h)
             ));
+            continue;
+        }
+        if t == WType::Database {
+            o.push_str(&format!("        self._database({}, {})\n", py_repr(n), py_repr(wd.prop("file").trim())));
             continue;
         }
         let call = format!("lambda *_: self._call({})", py_repr(h));
@@ -548,7 +568,23 @@ pub fn gen_qt(proj: &Project, stem: &str) -> String {
                 o.push_str(&format!("        _w.setScaledContents({})\n", b(wd.prop_bool("stretch"))));
                 o.push_str("        _w.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)\n");
             }
-            WType::Timer => unreachable!(),
+            WType::Datagrid => {
+                let cols = items_of(wd);
+                o.push_str("        _w = QTableWidget(self)\n");
+                o.push_str(&format!("        _w.setColumnCount({})\n", cols.len()));
+                o.push_str(&format!("        _w.setHorizontalHeaderLabels({})\n", py_list(&cols)));
+                o.push_str("        _w.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)\n");
+                o.push_str("        _w.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)\n");
+                o.push_str("        _w.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)\n");
+                o.push_str("        _w.verticalHeader().setVisible(False)\n");
+                o.push_str("        _w.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)\n");
+                o.push_str(&connect("itemSelectionChanged"));
+                let f = wd.event_fn("OnDblClick");
+                if !f.is_empty() {
+                    o.push_str(&format!("        _w.cellDoubleClicked.connect(lambda *_: self._call({}))\n", py_repr(&f)));
+                }
+            }
+            WType::Timer | WType::Database => unreachable!(),
         }
         if lk.size > 0 || lk.bold {
             o.push_str("        _f = _w.font()\n");

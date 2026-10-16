@@ -589,7 +589,7 @@ impl State {
                     rows.push(row("w", "Width", wd.w.to_string(), PropKind::Int));
                 }
                 if wd.wtype.has_text() {
-                    let kind = if matches!(wd.wtype, WType::Listbox | WType::Combobox | WType::Text) { PropKind::Items } else { PropKind::Text };
+                    let kind = if matches!(wd.wtype, WType::Listbox | WType::Combobox | WType::Text | WType::Datagrid) { PropKind::Items } else { PropKind::Text };
                     rows.push(row("text", info.text_prop, wd.text.replace('\n', "\\n"), kind));
                 }
                 for p in wd.wtype.props() {
@@ -1139,5 +1139,42 @@ mod tests {
         assert_eq!((t.w, t.h), (24, 24));
         assert!(s.hit_handle(t.x as f32 + 24.0, t.y as f32 + 24.0).is_none());
         assert_eq!(s.prop_rows().iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["Enabled", "Interval", "Left", "Name", "Top"]);
+    }
+
+    #[test]
+    fn database_and_grid_components() {
+        let mut s = State::new();
+        click_create(&mut s, WType::Database, 20.0, 20.0);
+        let d = s.selected().unwrap().clone();
+        assert_eq!((d.name.as_str(), d.w, d.h), ("Database1", 24, 24));
+        assert!(!d.wtype.is_visual() && d.wtype.events().is_empty());
+        assert_eq!(d.prop("file"), "daten.db");
+        assert!(s.hit_handle(d.x as f32 + 24.0, d.y as f32 + 24.0).is_none());
+        click_create(&mut s, WType::Datagrid, 60.0, 60.0);
+        assert_eq!(s.selected().unwrap().name, "Grid1");
+        s.set_prop("text_raw", "ID|Name|Telefon").unwrap();
+        let rows = s.prop_rows();
+        assert_eq!(rows.iter().find(|r| r.key == "text").unwrap().kind, PropKind::Items);
+        assert_eq!(rows.iter().find(|r| r.key == "text").unwrap().label, "Columns");
+        assert_eq!(model::items_of(s.selected().unwrap()), ["ID", "Name", "Telefon"]);
+        // Doppelklick -> Grid1Click; zweites Ereignis OnDblClick
+        s.create_event(Some(1), None);
+        assert_eq!(s.proj.widgets[1].handler, "Grid1Click");
+        s.create_event(Some(1), Some("OnDblClick"));
+        assert_eq!(s.proj.widgets[1].event_fn("OnDblClick"), "Grid1DblClick");
+        // Palette hat den Reiter
+        assert_eq!(model::PALETTE[3].0, "Bibliotheken");
+        // Code-Erzeugung
+        let tk = codegen::gen_tk(&s.proj, "t");
+        assert!(tk.contains("self._database('Database1', 'daten.db')"));
+        assert!(tk.contains("_w = _Grid(self.root, ['ID', 'Name', 'Telefon'])"));
+        assert!(tk.contains("_w.tree.bind('<Double-Button-1>'"));
+        let qt = codegen::gen_qt(&s.proj, "t");
+        assert!(qt.contains("QTableWidget(self)") && qt.contains("setHorizontalHeaderLabels(['ID', 'Name', 'Telefon'])"));
+        assert!(qt.contains("self._database('Database1', 'daten.db')") && qt.contains("cellDoubleClicked"));
+        // Speichern/Laden
+        let json = serde_json::to_string(&s.proj).unwrap();
+        let back: model::Project = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, s.proj);
     }
 }
