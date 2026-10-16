@@ -12,7 +12,6 @@ pub const GRID: i32 = 8;
 pub enum View {
     Form,
     Code,
-    Libs,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1163,7 +1162,7 @@ mod tests {
         s.create_event(Some(1), Some("OnDblClick"));
         assert_eq!(s.proj.widgets[1].event_fn("OnDblClick"), "Grid1DblClick");
         // Palette hat den Reiter
-        assert_eq!(model::PALETTE[3].0, "Bibliotheken");
+        assert_eq!(model::PALETTE[3].0, "Daten");
         // Code-Erzeugung
         let tk = codegen::gen_tk(&s.proj, "t");
         assert!(tk.contains("self._database('Database1', 'daten.db')"));

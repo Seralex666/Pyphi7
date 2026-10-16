@@ -103,6 +103,7 @@ pub struct App {
     lib_tx: Sender<Result<Vec<(String, String, String)>, String>>,
     lib_rx: Receiver<Result<Vec<(String, String, String)>, String>>,
     pip_busy: bool,
+    libs_open: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -354,6 +355,7 @@ impl App {
             lib_tx,
             lib_rx,
             pip_busy: false,
+            libs_open: false,
         }
     }
 
@@ -644,7 +646,6 @@ impl App {
         let mut todo: Option<(&'static str, Vec<String>)> = None;
         let mut reload = false;
         egui::Frame::NONE.fill(WHITE).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
-            ui.set_min_size(ui.available_size());
             ui.heading("Zusatz-Bibliotheken (pip)");
             ui.label("Pakete werden in den Python-Interpreter installiert, mit dem Pyphi7 deine Programme startet.");
             ui.horizontal(|ui| {
@@ -699,10 +700,15 @@ impl App {
                 }
             });
             ui.add_space(6.0);
-            ui.label(
-                egui::RichText::new("Schon in Python enthalten (nichts zu installieren): sqlite3 (Datenbank – Komponenten im Palette-Reiter „Bibliotheken“), tkinter, json, csv, datetime, decimal, random …")
-                    .color(GRAY),
-            );
+            ui.label("Schon in Python enthalten (nichts zu installieren)");
+            egui::Grid::new("libs_builtin").num_columns(3).spacing([14.0, 4.0]).striped(true).show(ui, |ui| {
+                for l in libs::BUILTIN {
+                    ui.label(egui::RichText::new(l.pkg).strong());
+                    ui.colored_label(Color32::from_rgb(0, 0x70, 0), "eingebaut");
+                    ui.label(l.info);
+                    ui.end_row();
+                }
+            });
             ui.add_space(4.0);
             ui.separator();
             ui.label("Anderes Paket (Name wie bei pip, mehrere mit Leerzeichen)");
@@ -758,10 +764,10 @@ impl App {
         chk.args(&pre).args(["-m", "PyInstaller", "--version"]).stdout(Stdio::null()).stderr(Stdio::null());
         hide_console(&mut chk);
         if !chk.status().map(|s| s.success()).unwrap_or(false) {
-            self.st.log("PyInstaller fehlt – im Tab „Bibliotheken“ installieren.", LogKind::Err);
-            self.st.view = View::Libs;
+            self.st.log("PyInstaller fehlt – unter „Bibliotheken…“ installieren.", LogKind::Err);
+            self.libs_open = true;
             self.modal = Some(Modal::Info(
-                "Für den EXE-Export wird PyInstaller gebraucht.\n\nIm Tab „Bibliotheken“ auf „Installieren“ bei pyinstaller klicken, danach Projekt > Als EXE exportieren erneut wählen.".into(),
+                "Für den EXE-Export wird PyInstaller gebraucht.\n\nIm Fenster „Bibliotheken“ (öffnet sich gleich) bei pyinstaller auf „Installieren“ klicken, danach Projekt > Als EXE exportieren erneut wählen.".into(),
             ));
             return;
         }
@@ -954,7 +960,7 @@ impl App {
             });
             ui.add_space(10.0);
             ui.vertical(|ui| {
-                // Registerkarten der Komponentenpalette (Standard / Zusätzlich / System)
+                // Registerkarten der Komponentenpalette (Standard / Zusätzlich / System / Daten)
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
                     for (i, (name, _)) in model::PALETTE.iter().enumerate() {
@@ -969,6 +975,18 @@ impl App {
                             self.pal_tab = i;
                         }
                     }
+                    // "Bibliotheken": kein Reiter, sondern ein Knopf, der die Paketverwaltung oeffnet
+                    ui.add_space(8.0);
+                    let tw = ui.painter().layout_no_wrap("Bibliotheken…".to_string(), font.clone(), BLACK).size().x;
+                    let (r, resp) = ui.allocate_exact_size(vec2(tw + 18.0, 20.0), Sense::click());
+                    let pressed = resp.is_pointer_button_down_on() || self.libs_open;
+                    let p = ui.painter();
+                    bevel(p, r.min.x, r.min.y + 1.0, r.max.x - 1.0, r.max.y + 1.0, pressed, FACE);
+                    p.text(pos2(r.center().x, r.center().y + 1.0), Align2::CENTER_CENTER, "Bibliotheken…", font.clone(), BLACK);
+                    if resp.clicked() {
+                        self.libs_open = true;
+                    }
+                    resp.on_hover_text("Python-Bibliotheken installieren, aktualisieren, entfernen");
                 });
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
@@ -992,15 +1010,6 @@ impl App {
                         if r.hovered() {
                             self.hint = wt.info().hint.into();
                         }
-                    }
-                    // Reiter "Bibliotheken": zusaetzlich Knopf zur pip-Verwaltung
-                    if model::PALETTE[self.pal_tab.min(model::PALETTE.len() - 1)].0 == "Bibliotheken" {
-                        ui.add_space(10.0);
-                        let r = ui.add_sized([110.0, 30.0], egui::Button::new("Python-Pakete (pip)…"));
-                        if r.clicked() {
-                            self.st.view = View::Libs;
-                        }
-                        r.on_hover_text("Python-Pakete installieren, aktualisieren, entfernen");
                     }
                 });
             });
@@ -2242,7 +2251,7 @@ impl eframe::App for App {
                     ui.spacing_mut().item_spacing.x = 2.0;
                     let code_name = self.st.stem().map(|s| format!("{}_logic.py", s)).unwrap_or_else(|| "Unit1.py".into());
                     let form_name = if self.st.proj.title.is_empty() { FORM_CLASS.to_string() } else { self.st.proj.title.clone() };
-                    for (view, name) in [(View::Form, form_name), (View::Code, code_name), (View::Libs, "Python-Pakete".to_string())] {
+                    for (view, name) in [(View::Form, form_name), (View::Code, code_name)] {
                         if ui.selectable_label(self.st.view == view, name).clicked() {
                             self.st.view = view;
                         }
@@ -2251,9 +2260,24 @@ impl eframe::App for App {
                 match self.st.view {
                     View::Form => self.form_view(ui),
                     View::Code => self.code_view(ui),
-                    View::Libs => self.libs_view(ui),
                 }
             });
+
+        // ---- Fenster "Bibliotheken" (pip)
+        if self.libs_open {
+            let mut open = true;
+            egui::Window::new("Bibliotheken")
+                .open(&mut open)
+                .collapsible(false)
+                .default_size([660.0, 560.0])
+                .default_pos([260.0, 90.0])
+                .show(&ctx, |ui| {
+                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| self.libs_view(ui));
+                });
+            if !open {
+                self.libs_open = false;
+            }
+        }
 
         // ---- Aktionen und Dialoge
         let actions: Vec<Action> = std::mem::take(&mut self.queue);

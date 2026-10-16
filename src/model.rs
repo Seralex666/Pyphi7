@@ -47,7 +47,7 @@ pub const PALETTE: [(&str, &[WType]); 4] = [
     ),
     ("Zusätzlich", &[WType::Progressbar, WType::Trackbar, WType::Spinedit, WType::Image]),
     ("System", &[WType::Timer]),
-    ("Bibliotheken", &[WType::Database, WType::Datagrid]),
+    ("Daten", &[WType::Database, WType::Datagrid]),
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

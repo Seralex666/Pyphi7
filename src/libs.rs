@@ -18,6 +18,14 @@ pub const CURATED: &[Lib] = &[
     Lib { pkg: "psutil", info: "System- und Prozessinformationen" },
 ];
 
+/// Schon in Python enthalten (nichts zu installieren).
+pub const BUILTIN: &[Lib] = &[
+    Lib { pkg: "sqlite3", info: "Datenbank (SQL) – Komponenten Database und Grid im Reiter „Daten“" },
+    Lib { pkg: "tkinter", info: "Oberfläche der Tkinter-Programme" },
+    Lib { pkg: "json, csv", info: "Dateien lesen und schreiben" },
+    Lib { pkg: "decimal, datetime", info: "Geldbeträge und Datum/Uhrzeit" },
+];
+
 /// pip-Namen sind unabhaengig von Gross-/Kleinschreibung und `_`/`-`/`.`.
 pub fn norm(name: &str) -> String {
     name.trim().to_lowercase().replace(['_', '.'], "-")

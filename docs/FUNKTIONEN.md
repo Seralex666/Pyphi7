@@ -103,7 +103,7 @@ if ui.ask_yes_no("Wirklich löschen?"):
 ## Datenbank (SQLite)
 
 SQLite ist in Python eingebaut (`sqlite3`), du musst nichts installieren. Im Palette-Reiter
-**Bibliotheken** liegen zwei Komponenten:
+**Daten** liegen zwei Komponenten:
 
 * **Database** (nicht sichtbar, wie der Timer): Eigenschaft **FileName** (Standard `daten.db`).
   Die Datei wird beim Programmstart geöffnet und bei Bedarf **neu angelegt**. Ein relativer Name liegt
@@ -304,7 +304,7 @@ def Edit1KeyPress(ui):
 
 In `_logic.py` darfst du beliebig eigenen Python-Code schreiben: Hilfsfunktionen, globale Variablen,
 `import`s anderer Module. Alle Funktionen, die kein Ereignis sind, nimmt Pyphi7 unverändert mit.
-Zusätzliche Bibliotheken installierst du im Tab **Bibliotheken**.
+Zusätzliche Bibliotheken installierst du über den Knopf **Bibliotheken…** neben den Palette-Reitern (öffnet ein Fenster).
 
 ```python
 from decimal import Decimal

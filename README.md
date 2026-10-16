@@ -38,9 +38,9 @@ baut die `.exe` und stellt sie unter „Actions → Artifacts“ bereit.
   alle Ereignisse jedes Objekts (belegte fett, „neu“ = noch keine Funktion), dazu eigene Funktionen.
   Klick springt zur Funktion bzw. legt sie an.
 
-## Python-Pakete
+## Bibliotheken (pip)
 
-Der Tab **Python-Pakete** (auch über den Knopf im Palette-Reiter *Bibliotheken*) installiert, aktualisiert und entfernt Python-Pakete per pip direkt aus Pyphi7
+Der Knopf **Bibliotheken…** (rechts neben den Palette-Reitern) öffnet ein Fenster, das installiert, aktualisiert und entfernt Python-Pakete per pip direkt aus Pyphi7
 (Empfehlungen wie PyInstaller, PySide6, Pillow, requests … oder ein beliebiger Paketname). Die pip-Ausgabe
 erscheint in den Meldungen. Es wird der Interpreter verwendet, mit dem auch F9 startet.
 
@@ -48,13 +48,13 @@ erscheint in den Meldungen. Es wird der Interpreter verwendet, mit dem auch F9 s
 
 *Projekt → Als EXE exportieren…* erzeugt mit PyInstaller aus den Python-Dateien eine einzelne
 ausführbare Datei (pro gewähltem Toolkit eine) im Ordner `dist/` neben dem Projekt; Bilder werden eingebaut.
-Voraussetzung: Python und PyInstaller (Tab Bibliotheken → Installieren) (für Qt zusätzlich `pip install PySide6`).
+Voraussetzung: Python und PyInstaller (Knopf Bibliotheken… → Installieren) (für Qt zusätzlich `pip install PySide6`).
 Eine Windows-`.exe` entsteht nur unter Windows (PyInstaller baut immer für das aktuelle System).
 Das Raster im Formular (Ansicht → Raster anzeigen) ist als Punktraster sichtbar.
 
 ## Datenbank (SQLite)
 
-Im Palette-Reiter **Bibliotheken**: *Database* (SQLite-Datei, wird bei Bedarf angelegt) und *Grid* (Datentabelle).
+Im Palette-Reiter **Daten**: *Database* (SQLite-Datei, wird bei Bedarf angelegt) und *Grid* (Datentabelle).
 In der Logik: `ui.db_execute`, `ui.db_query`, `ui.show_query("Grid1", sql)` u. a. – siehe
 `docs/FUNKTIONEN.md` und das Beispiel `beispiel/kontakte.pyphi`.
 
